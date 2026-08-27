@@ -26,8 +26,9 @@ function SettingsInner() {
 
   useEffect(() => {
     const g = params.get("google");
+    const reason = params.get("reason");
     if (g === "ok") toast.success("Google connected. Drive folders are ready.");
-    if (g === "error") toast.error("Google connect failed. Try again.");
+    if (g === "error") toast.error(reason || "Google connect failed. Try again.");
     if (g === "denied") toast.error("Google access was not granted.");
   }, [params]);
 

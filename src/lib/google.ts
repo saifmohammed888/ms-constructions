@@ -42,11 +42,15 @@ export function googleAuthUrl(baseUrl: string) {
 
 export async function exchangeCode(code: string, baseUrl: string) {
   const client = oauthClient(baseUrl);
-  const { tokens } = await client.getToken(code);
-  if (!tokens.refresh_token) {
-    throw new Error("No refresh token returned. Reconnect Google and approve access again.");
+  try {
+    const { tokens } = await client.getToken(code);
+    if (!tokens.refresh_token) {
+      throw new Error("Google did not return a refresh token. Remove the app from https://myaccount.google.com/permissions then Connect Google again.");
+    }
+    return tokens.refresh_token;
+  } catch (err) {
+    throw new Error(googleErr(err));
   }
-  return tokens.refresh_token;
 }
 
 async function authedClient() {
@@ -57,9 +61,27 @@ async function authedClient() {
   return client;
 }
 
+function googleErr(err: unknown) {
+  const e = err as {
+    message?: string;
+    response?: { data?: { error?: string | { message?: string; error_description?: string } } };
+  };
+  const data = e.response?.data?.error;
+  if (typeof data === "string") return data;
+  if (data && typeof data === "object") {
+    return data.message || data.error_description || e.message || "Google API error";
+  }
+  return e.message || "Google connect failed";
+}
+
 export async function saveRefreshToken(refreshToken: string, projectName: string) {
   const db = await getDb();
-  const folderId = await ensureDriveTree(refreshToken, projectName);
+  let folderId: string | null = null;
+  try {
+    folderId = await ensureDriveTree(refreshToken, projectName);
+  } catch (err) {
+    console.error("Drive folder setup failed", googleErr(err));
+  }
   await db
     .update(settings)
     .set({
@@ -77,16 +99,6 @@ async function driveFromRefresh(refreshToken: string) {
 }
 
 async function findOrCreateFolder(drive: ReturnType<typeof google.drive>, name: string, parentId?: string) {
-  const q = parentId
-    ? `name='${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
-    : `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const existing = await drive.files.list({
-    q,
-    fields: "files(id,name)",
-    spaces: "drive",
-  });
-  const hit = existing.data.files?.[0];
-  if (hit?.id) return hit.id;
   const created = await drive.files.create({
     requestBody: {
       name,
@@ -95,7 +107,8 @@ async function findOrCreateFolder(drive: ReturnType<typeof google.drive>, name: 
     },
     fields: "id",
   });
-  return created.data.id!;
+  if (!created.data.id) throw new Error(`Could not create Drive folder: ${name}`);
+  return created.data.id;
 }
 
 export async function ensureDriveTree(refreshToken: string, projectName: string) {
