@@ -32,8 +32,8 @@ export function AppShell({
     <div className="min-h-dvh bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r bg-sidebar p-4 md:flex md:flex-col">
         <div className="mb-6 px-2">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Construction
+          <p className="text-xs font-medium tracking-wide text-amber-800/70 uppercase">
+            MS Constructions
           </p>
           <p className="mt-1 truncate text-lg font-semibold">{projectName}</p>
         </div>

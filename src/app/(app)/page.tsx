@@ -12,6 +12,7 @@ import { ExpenseForm } from "@/components/expense-form";
 import { TaskForm } from "@/components/task-form";
 import { formatDate, formatInr } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/constants";
+import { PageLoader } from "@/components/ui/spinner";
 import Link from "next/link";
 
 type Dash = {
@@ -55,10 +56,14 @@ export default function DashboardPage() {
   });
 
   if (dash.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading your site…</p>;
+    return <PageLoader label="Loading your site…" />;
   }
   if (dash.isError) {
-    return <p className="text-sm text-destructive">Could not load the dashboard. Refresh and try again.</p>;
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive">
+        Could not load the dashboard. Refresh and try again.
+      </div>
+    );
   }
   const d = dash.data!;
 

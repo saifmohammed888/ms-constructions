@@ -107,7 +107,7 @@ export function TaskForm({
             {!dueDate && <span className="block text-xs text-muted-foreground">Add a due date to enable. One-way: app → calendar.</span>}
           </span>
         </label>
-        <Button type="submit" className="min-h-11" disabled={save.isPending}>
+        <Button type="submit" className="min-h-11 gap-2" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save task"}
         </Button>
       </form>

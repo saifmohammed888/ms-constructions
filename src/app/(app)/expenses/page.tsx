@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CardSkeleton } from "@/components/ui/spinner";
 import { Suspense } from "react";
 
 type Expense = {
@@ -150,7 +151,7 @@ function ExpensesInner() {
       </div>
 
       {list.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading expenses…</p>
+        <CardSkeleton rows={5} />
       ) : (list.data?.items.length ?? 0) === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">No expenses in this view</p>

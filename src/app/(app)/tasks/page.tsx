@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { TaskForm } from "@/components/task-form";
+import { CardSkeleton } from "@/components/ui/spinner";
 import { formatDate, formatMonthLabel, formatWeekLabel, isoWeekKey, monthKey, todayIso } from "@/lib/format";
 
 type Task = {
@@ -145,7 +146,7 @@ export default function TasksPage() {
       )}
 
       {list.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading tasks…</p>
+        <CardSkeleton rows={4} />
       ) : tasks.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">No tasks yet</p>

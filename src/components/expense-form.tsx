@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ResponsiveForm } from "@/components/responsive-form";
+import { Spinner } from "@/components/ui/spinner";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
@@ -194,7 +195,8 @@ export function ExpenseForm({
             onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
           />
         </div>
-        <Button type="submit" className="min-h-11" disabled={save.isPending}>
+        <Button type="submit" className="min-h-11 gap-2" disabled={save.isPending}>
+          {save.isPending && <Spinner />}
           {save.isPending ? "Saving…" : "Save expense"}
         </Button>
       </form>

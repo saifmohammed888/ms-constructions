@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
+import { PasswordField } from "@/components/password-field";
+import { PageLoader, Spinner } from "@/components/ui/spinner";
 import { formatDate, formatInr } from "@/lib/format";
 
 function SettingsInner() {
@@ -92,6 +94,10 @@ function SettingsInner() {
     window.location.href = "/login";
   };
 
+  if (settings.isLoading) {
+    return <PageLoader label="Loading settings…" />;
+  }
+
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4">
       <h1 className="text-2xl font-semibold">Settings</h1>
@@ -126,7 +132,8 @@ function SettingsInner() {
               ))}
             </div>
           </div>
-          <Button className="min-h-11" onClick={() => save.mutate()} disabled={save.isPending}>
+          <Button className="min-h-11 gap-2" onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending && <Spinner />}
             Save project
           </Button>
         </CardContent>
@@ -177,14 +184,14 @@ function SettingsInner() {
               A password hash is set in APP_PASSWORD_HASH and takes priority. Changing it here stores a fallback hash.
             </p>
           )}
-          <Input
-            type="password"
-            className="min-h-11"
+          <PasswordField
+            id="new-password"
             placeholder="New password (6+ characters)"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
           />
-          <Button className="min-h-11" variant="outline" onClick={() => save.mutate()} disabled={!password}>
+          <Button className="min-h-11 gap-2" variant="outline" onClick={() => save.mutate()} disabled={!password || save.isPending}>
+            {save.isPending && <Spinner />}
             Change password
           </Button>
           <Button className="min-h-11" variant="ghost" onClick={logout}>

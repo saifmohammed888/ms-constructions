@@ -10,6 +10,7 @@ import { ContactForm } from "@/components/contact-form";
 import { formatInr, formatDate } from "@/lib/format";
 import { CONTACT_ROLES, CONTACT_ROLE_LABELS, type ContactRole } from "@/lib/constants";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CardSkeleton } from "@/components/ui/spinner";
 
 type Contact = {
   id: string;
@@ -75,7 +76,7 @@ export default function ContactsPage() {
       </div>
 
       {list.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading contacts…</p>
+        <CardSkeleton rows={4} />
       ) : (list.data?.length ?? 0) === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">No contacts yet</p>

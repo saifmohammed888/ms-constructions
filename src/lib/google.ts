@@ -140,6 +140,25 @@ export async function getDrive() {
   return google.drive({ version: "v3", auth });
 }
 
+export async function downloadDriveFile(fileId: string) {
+  const drive = await getDrive();
+  if (!drive) throw new Error("Google Drive is not connected");
+  const meta = await drive.files.get({
+    fileId,
+    fields: "id,name,mimeType,size",
+  });
+  const media = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" },
+  );
+  const data = media.data as ArrayBuffer;
+  return {
+    buffer: Buffer.from(data),
+    mimeType: meta.data.mimeType || "application/octet-stream",
+    name: meta.data.name || "file",
+  };
+}
+
 export async function getCalendar() {
   const auth = await authedClient();
   if (!auth) return null;
