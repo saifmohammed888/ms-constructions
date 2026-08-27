@@ -1,15 +1,9 @@
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import postgres from "postgres";
-import { PGlite } from "@electric-sql/pglite";
-import { mkdirSync } from "fs";
-import path from "path";
 import { eq } from "drizzle-orm";
 import { schema, settings } from "@/lib/schema";
 
-type AppDb =
-  | ReturnType<typeof drizzlePg<typeof schema>>
-  | ReturnType<typeof drizzlePglite<typeof schema>>;
+type AppDb = ReturnType<typeof drizzlePg<typeof schema>>;
 
 let cached: AppDb | null = null;
 let ready = false;
@@ -89,13 +83,26 @@ CREATE INDEX IF NOT EXISTS documents_category_idx ON documents (category);
 CREATE INDEX IF NOT EXISTS documents_uploaded_at_idx ON documents (uploaded_at DESC);
 `;
 
+export function databaseUrl() {
+  const raw =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.ms_DATABASE_URL;
+  if (!raw) return "";
+  const u = new URL(raw);
+  u.searchParams.delete("channel_binding");
+  if (!u.searchParams.get("sslmode")) u.searchParams.set("sslmode", "require");
+  return u.toString();
+}
+
 async function applyDdl(exec: (sql: string) => Promise<unknown>) {
   for (const stmt of DDL.split(";").map((s) => s.trim()).filter(Boolean)) {
     try {
       await exec(stmt);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (/already exists|extension/i.test(msg)) continue;
+      if (/already exists|extension|duplicate/i.test(msg)) continue;
       throw err;
     }
   }
@@ -104,20 +111,29 @@ async function applyDdl(exec: (sql: string) => Promise<unknown>) {
 export async function getDb(): Promise<AppDb> {
   if (cached && ready) return cached;
 
-  if (process.env.DATABASE_URL) {
-    const client = postgres(process.env.DATABASE_URL, {
+  const url = databaseUrl();
+  if (url) {
+    const client = postgres(url, {
       max: 1,
       prepare: false,
       ssl: "require",
+      idle_timeout: 20,
+      connect_timeout: 15,
     });
     cached = drizzlePg(client, { schema });
     await applyDdl((s) => client.unsafe(s));
+  } else if (process.env.VERCEL) {
+    throw new Error("DATABASE_URL is missing on Vercel");
   } else {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
+    const { mkdirSync } = await import("fs");
+    const path = await import("path");
     const dir = path.join(process.cwd(), "data");
     mkdirSync(dir, { recursive: true });
     const pglite = new PGlite(path.join(dir, "construction"));
     await pglite.waitReady;
-    cached = drizzlePglite(pglite, { schema });
+    cached = drizzlePglite(pglite, { schema }) as unknown as AppDb;
     await applyDdl((s) => pglite.exec(s));
   }
 
@@ -125,8 +141,6 @@ export async function getDb(): Promise<AppDb> {
   const existing = await db.select().from(settings).limit(1);
   if (existing.length === 0) {
     await db.insert(settings).values({ id: 1, projectName: "My Construction" });
-  } else if (!existing.find((r) => r.id === 1)) {
-    await db.insert(settings).values({ id: 1 });
   }
   ready = true;
   return db;

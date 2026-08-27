@@ -6,8 +6,12 @@ export async function verifyPassword(password: string) {
   const row = await getSettingsRow();
   const hash = envHash || row?.passwordHash;
   if (!hash) return { ok: false as const, needsSetup: true as const };
-  const ok = await bcrypt.compare(password, hash);
-  return { ok, needsSetup: false as const };
+  try {
+    const ok = await bcrypt.compare(password, hash);
+    return { ok, needsSetup: false as const };
+  } catch {
+    return { ok: false as const, needsSetup: false as const };
+  }
 }
 
 export async function passwordConfigured() {

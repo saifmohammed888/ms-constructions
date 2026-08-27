@@ -18,19 +18,24 @@ function LoginInner() {
     e.preventDefault();
     setPending(true);
     setError("");
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json();
-    setPending(false);
-    if (!res.ok) {
-      setError(data.error || "Wrong password");
-      return;
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Login failed. Check Vercel env vars.");
+        return;
+      }
+      router.push(params.get("next") || "/");
+      router.refresh();
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setPending(false);
     }
-    router.push(params.get("next") || "/");
-    router.refresh();
   }
 
   return (
