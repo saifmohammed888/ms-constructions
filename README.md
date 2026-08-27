@@ -23,7 +23,7 @@ Without `DATABASE_URL`, the app uses a local Postgres-compatible file database i
 1. Connect this GitHub repo in Vercel.
 2. Create a Neon Postgres database (Vercel Storage → Neon) and set `DATABASE_URL`.
 3. Set environment variables (see `.env.example`):
-   - `APP_PASSWORD_HASH` — from `npm run hash-password -- '…'`
+   - `APP_PASSWORD_HASH` — from `npm run hash-password -- '…'` (quote the hash; `$` must not be expanded)
    - `SESSION_SECRET` — long random string
    - `ENCRYPTION_KEY` — 64 hex characters (32 bytes)
    - `APP_URL` — `https://your-app.vercel.app`
