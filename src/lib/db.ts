@@ -105,7 +105,11 @@ export async function getDb(): Promise<AppDb> {
   if (cached && ready) return cached;
 
   if (process.env.DATABASE_URL) {
-    const client = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
+    const client = postgres(process.env.DATABASE_URL, {
+      max: 1,
+      prepare: false,
+      ssl: "require",
+    });
     cached = drizzlePg(client, { schema });
     await applyDdl((s) => client.unsafe(s));
   } else {
