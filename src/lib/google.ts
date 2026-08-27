@@ -12,9 +12,18 @@ export function googleConfigured() {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-function oauthClient() {
+export function appBaseUrl(req?: { url: string }) {
+  const env = process.env.APP_URL?.trim().replace(/\/$/, "") ?? "";
+  const isLocal = !env || /localhost|127\.0\.0\.1/.test(env);
+  if (env && !isLocal) return env;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
+  if (req) return new URL(req.url).origin;
+  return env || "http://127.0.0.1:43123";
+}
+
+function oauthClient(baseUrl: string) {
   if (!googleConfigured()) throw new Error("Google OAuth is not configured");
-  const redirect = `${process.env.APP_URL ?? "http://127.0.0.1:43123"}/api/auth/google/callback`;
+  const redirect = `${baseUrl.replace(/\/$/, "")}/api/auth/google/callback`;
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -22,8 +31,8 @@ function oauthClient() {
   );
 }
 
-export function googleAuthUrl() {
-  const client = oauthClient();
+export function googleAuthUrl(baseUrl: string) {
+  const client = oauthClient(baseUrl);
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -31,8 +40,8 @@ export function googleAuthUrl() {
   });
 }
 
-export async function exchangeCode(code: string) {
-  const client = oauthClient();
+export async function exchangeCode(code: string, baseUrl: string) {
+  const client = oauthClient(baseUrl);
   const { tokens } = await client.getToken(code);
   if (!tokens.refresh_token) {
     throw new Error("No refresh token returned. Reconnect Google and approve access again.");
@@ -43,7 +52,7 @@ export async function exchangeCode(code: string) {
 async function authedClient() {
   const row = await getSettingsRow();
   if (!row?.googleRefreshToken) return null;
-  const client = oauthClient();
+  const client = oauthClient(appBaseUrl());
   client.setCredentials({ refresh_token: decrypt(row.googleRefreshToken) });
   return client;
 }
@@ -62,7 +71,7 @@ export async function saveRefreshToken(refreshToken: string, projectName: string
 }
 
 async function driveFromRefresh(refreshToken: string) {
-  const client = oauthClient();
+  const client = oauthClient(appBaseUrl());
   client.setCredentials({ refresh_token: refreshToken });
   return google.drive({ version: "v3", auth: client });
 }
