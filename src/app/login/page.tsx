@@ -31,7 +31,7 @@ function LoginInner() {
         setError(data.error || "Login failed. Check Vercel env vars.");
         return;
       }
-      router.push(params.get("next") || "/");
+      router.push(params.get("next") || "/build");
       router.refresh();
     } catch {
       setError("Network error. Try again.");

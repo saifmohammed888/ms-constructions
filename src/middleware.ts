@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const PUBLIC = [
+  "/",
   "/login",
+  "/sir",
   "/api/auth/login",
   "/api/auth/google",
   "/api/auth/google/callback",

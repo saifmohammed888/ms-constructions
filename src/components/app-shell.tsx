@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/build", label: "Home", icon: Home },
   { href: "/expenses", label: "Expenses", icon: IndianRupee },
   { href: "/tasks", label: "Tasks", icon: ClipboardList },
   { href: "/contacts", label: "Contacts", icon: Users },
@@ -39,7 +39,7 @@ export function AppShell({
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {NAV.map((item) => {
-            const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
+            const active = item.href === "/build" ? path === "/build" : path.startsWith(item.href);
             return (
               <Link
                 key={item.href}
@@ -82,7 +82,7 @@ export function AppShell({
 
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-background md:hidden">
         {NAV.map((item) => {
-          const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
+          const active = item.href === "/build" ? path === "/build" : path.startsWith(item.href);
           return (
             <Link
               key={item.href}
