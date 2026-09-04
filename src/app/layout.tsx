@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MS Constructions — Site tracker",
-  description: "Track people, money, tasks, and documents for a Bangalore residential build.",
+  title: "Karnataka SIR Tracker — Notices & deadlines",
+  description:
+    "Track Karnataka Special Intensive Revision (SIR) voter notices, district statistics, key deadlines, and your family's notice status.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
