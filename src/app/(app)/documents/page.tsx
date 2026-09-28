@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileUp, Pencil, Trash2, Upload } from "lucide-react";
+import { ChevronsUpDown, Eye, FileUp, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -37,6 +37,7 @@ export default function DocumentsPage() {
   const qc = useQueryClient();
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
+  const [sort, setSort] = useState<"name" | "uploadedAt">("uploadedAt");
   const [preview, setPreview] = useState<Doc | null>(null);
   const [editing, setEditing] = useState<Doc | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Doc | null>(null);
@@ -122,6 +123,8 @@ export default function DocumentsPage() {
     },
   });
 
+  const items = [...(list.data ?? [])].sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : b.uploadedAt.localeCompare(a.uploadedAt));
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <UploadOverlay show={uploadState.total > 0 && uploadState.done < uploadState.total} />
@@ -203,29 +206,7 @@ export default function DocumentsPage() {
           <p className="mt-1 text-sm text-muted-foreground">Upload a drawing or approval PDF.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {list.data!.map((doc) => (
-            <div key={doc.id} className="group relative overflow-hidden rounded-xl border bg-card">
-              <button className="block w-full text-left" onClick={() => setPreview(doc)}>
-                <div className="aspect-square overflow-hidden">{<FileThumb doc={doc} />}</div>
-                <div className="p-2">
-                  <p className="truncate text-sm font-medium">{doc.name}</p>
-                  <p className="text-xs text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory]}</p>
-                </div>
-              </button>
-              <button
-                className="absolute top-2 right-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-background/90 text-destructive shadow-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPendingDelete(doc);
-                }}
-                aria-label={`Delete ${doc.name}`}
-              >
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-          ))}
-        </div>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Document" onClick={() => setSort("name")} /></th><th className="px-4 py-3">Category</th><th className="px-4 py-3"><SortButton label="Added" onClick={() => setSort("uploadedAt")} /></th><th className="w-40 px-4 py-3" /></tr></thead><tbody>{items.map((doc) => <tr key={doc.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-2"><button className="flex items-center gap-3 text-left" onClick={() => setPreview(doc)}><span className="size-12 shrink-0 overflow-hidden rounded-lg border bg-zinc-50"><FileThumb doc={doc} /></span><span className="font-medium">{doc.name}</span></button></td><td className="px-4 py-3 text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="px-4 py-3 text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View document" onClick={() => setPreview(doc)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Rename document" onClick={() => setEditing(doc)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete document" onClick={() => setPendingDelete(doc)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <Dialog open={Boolean(preview)} onOpenChange={(o) => !o && setPreview(null)}>
@@ -278,6 +259,8 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }
 
 function DocEditForm({
   doc,

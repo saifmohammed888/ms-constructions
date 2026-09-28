@@ -89,8 +89,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <SitePhotoCarousel photos={d.recentPhotos} />
-
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <QuickAction icon={Receipt} label="Expense" onClick={() => setExpenseOpen(true)} />
         <QuickAction icon={FileUp} label="Upload" href="/documents" />
@@ -187,10 +185,25 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      <Card className="rounded-2xl border-black/5 shadow-sm">
+        <CardHeader><CardTitle className="text-base">Project insights</CardTitle></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <Insight label="Due payments" value={formatInr(d.duePayments.reduce((sum, payment) => sum + Number(payment.amount), 0))} tone={d.duePayments.length ? "amber" : "green"} detail={d.duePayments.length ? `${d.duePayments.length} payment${d.duePayments.length === 1 ? "" : "s"} to plan for` : "Nothing pending"} />
+          <Insight label="Upcoming work" value={`${d.thisWeek.filter((task) => task.status !== "done").length}`} tone={d.thisWeek.some((task) => task.status !== "done") ? "blue" : "green"} detail="Open tasks this week" />
+          <Insight label="Project activity" value={`${d.recent.length}`} tone="neutral" detail="Recent expense records" />
+        </CardContent>
+      </Card>
+
       <ExpenseForm open={expenseOpen} onOpenChange={setExpenseOpen} />
       <TaskForm open={taskOpen} onOpenChange={setTaskOpen} />
+      <SitePhotoCarousel photos={d.recentPhotos} />
     </div>
   );
+}
+
+function Insight({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "amber" | "green" | "blue" | "neutral" }) {
+  const styles = { amber: "bg-amber-50 text-amber-900", green: "bg-emerald-50 text-emerald-900", blue: "bg-blue-50 text-blue-900", neutral: "bg-zinc-50 text-zinc-900" };
+  return <div className={`rounded-xl p-4 ${styles[tone]}`}><p className="text-xs font-medium uppercase tracking-wide opacity-70">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p><p className="mt-1 text-xs opacity-70">{detail}</p></div>;
 }
 
 function SitePhotoCarousel({ photos }: { photos: Dash["recentPhotos"] }) {

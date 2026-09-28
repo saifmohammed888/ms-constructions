@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronsUpDown, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ExpenseForm } from "@/components/expense-form";
 import { formatDate, formatInr, todayIso } from "@/lib/format";
 import {
@@ -15,13 +16,6 @@ import {
   PAYMENT_STATUS_LABELS,
   type ExpenseCategory,
 } from "@/lib/constants";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CardSkeleton } from "@/components/ui/spinner";
 import { Suspense } from "react";
 
@@ -41,8 +35,7 @@ function ExpensesInner() {
   const params = useSearchParams();
   const qc = useQueryClient();
   const [category, setCategory] = useState(params.get("category") ?? "");
-  const [month, setMonth] = useState("");
-  const [contactId, setContactId] = useState("");
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [sort, setSort] = useState<{ key: "date" | "amount" | "category"; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
@@ -51,17 +44,11 @@ function ExpensesInner() {
     queryKey: ["settings"],
     queryFn: () => fetch("/api/settings").then((r) => r.json()),
   });
-  const contacts = useQuery({
-    queryKey: ["contacts"],
-    queryFn: () => fetch("/api/contacts").then((r) => r.json()),
-  });
   const query = useMemo(() => {
     const s = new URLSearchParams();
     if (category) s.set("category", category);
-    if (month) s.set("month", month);
-    if (contactId) s.set("contact_id", contactId);
     return s.toString();
-  }, [category, month, contactId]);
+  }, [category]);
 
   const list = useQuery({
     queryKey: ["expenses", query],
@@ -88,11 +75,14 @@ function ExpensesInner() {
     acc[e.category] = (acc[e.category] ?? 0) + Number(e.amount);
     return acc;
   }, {});
-  const items = useMemo(() => [...(list.data?.items ?? [])].sort((a, b) => {
+  const items = useMemo(() => [...(list.data?.items ?? [])].filter((e) => {
+    const needle = search.trim().toLowerCase();
+    return !needle || [e.category, e.paymentMode, e.paymentStatus, e.notes].some((value) => value?.toLowerCase().includes(needle));
+  }).sort((a, b) => {
     const av = sort.key === "amount" ? Number(a.amount) : sort.key === "category" ? a.category : a.date;
     const bv = sort.key === "amount" ? Number(b.amount) : sort.key === "category" ? b.category : b.date;
     return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.direction === "asc" ? 1 : -1);
-  }), [list.data?.items, sort]);
+  }), [list.data?.items, sort, search]);
   const toggleSort = (key: "date" | "amount" | "category") => setSort((s) => ({ key, direction: s.key === key && s.direction === "asc" ? "desc" : "asc" }));
 
   return (
@@ -119,8 +109,8 @@ function ExpensesInner() {
         </div>
       </div>
 
-      <div className="sticky top-14 z-10 -mx-4 flex flex-col gap-2 border-b bg-background px-4 py-3 md:mx-0 md:rounded-xl md:border">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+      <Input className="min-h-11 rounded-xl bg-transparent" placeholder="Search category, payment, or notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex gap-2 overflow-x-auto pb-1">
           <Button size="sm" variant={category === "" ? "default" : "outline"} className="min-h-9" onClick={() => setCategory("")}>
             All
           </Button>
@@ -138,28 +128,6 @@ function ExpensesInner() {
               </Button>
             );
           })}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="month"
-            className="min-h-11 rounded-lg border px-3 text-sm"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-          <Select value={contactId || "all"} onValueChange={(v) => setContactId(v === "all" ? "" : String(v))}>
-            <SelectTrigger className="min-h-11 w-48">
-              <SelectValue placeholder="Payee" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All payees</SelectItem>
-              {(contacts.data ?? []).map((c: { id: string; name: string }) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {list.isLoading ? (

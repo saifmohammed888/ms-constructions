@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { HardHat } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PasswordField } from "@/components/password-field";
@@ -41,40 +42,42 @@ function LoginInner() {
   }
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-stone-100 p-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_oklch(0.92_0.04_70),_transparent_55%)]" />
-      <form
-        onSubmit={submit}
-        className="relative w-full max-w-sm rounded-2xl border bg-background/95 p-7 shadow-lg backdrop-blur"
-      >
-        <div className="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <HardHat className="size-5" />
+    <main className="min-h-dvh bg-[#edece8] p-3 sm:p-6">
+      <div className="mx-auto grid min-h-[calc(100dvh-1.5rem)] max-w-6xl overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-black/10 sm:min-h-[calc(100dvh-3rem)] lg:grid-cols-[1.15fr_.85fr]">
+        <div className="relative min-h-[42dvh] overflow-hidden bg-[#e6e1d8] lg:min-h-0">
+          <Image src="/floor-plans/premium-2bhk-4-options-sheet.png" alt="Kothanur construction floor plan" fill priority sizes="(max-width: 1024px) 100vw, 60vw" className="object-cover object-center opacity-90" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#171512]/80 via-[#171512]/10 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-6 text-white sm:p-10">
+            <p className="text-xs font-medium uppercase tracking-[0.25em] text-white/70">A place taking shape</p>
+            <p className="mt-2 max-w-md text-2xl font-semibold tracking-tight sm:text-4xl">Every detail of your build, in one calm place.</p>
+          </div>
         </div>
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">MS Constructions</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Site tracker</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Owner access only. Use the password set in Vercel (`APP_PASSWORD_HASH`), or set one here on first run.
-        </p>
-        <div className="mt-6">
-          <Label htmlFor="password">Password</Label>
-          <PasswordField
-            id="password"
-            autoFocus
-            className="mt-1.5"
-            value={password}
-            onChange={setPassword}
-          />
-        </div>
+        <div className="flex items-center p-7 sm:p-12 lg:p-14">
+          <form onSubmit={submit} className="w-full max-w-sm">
+            <div className="mb-8 flex size-12 items-center justify-center rounded-2xl bg-[#171512] text-sm font-bold tracking-tight text-white">MS</div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">MS Ventures</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">Kothanur Construction</h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">Your private project space.</p>
+            <div className="mt-9">
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+              <div className="relative mt-2">
+                <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <PasswordField id="password" autoFocus className="min-h-12 pl-10" value={password} onChange={setPassword} />
+              </div>
+            </div>
         {error && (
-          <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
           </p>
         )}
-        <Button type="submit" className="mt-4 min-h-11 w-full gap-2" disabled={pending || !password}>
+        <Button type="submit" className="mt-5 min-h-12 w-full justify-between rounded-xl px-4 text-sm" disabled={pending || !password}>
           {pending && <Spinner />}
-          {pending ? "Signing in…" : "Enter"}
+          <span>{pending ? "Signing in…" : "Enter project"}</span>
+          {!pending && <ArrowRight className="size-4" />}
         </Button>
-      </form>
+          </form>
+        </div>
+      </div>
     </main>
   );
 }
