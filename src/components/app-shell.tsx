@@ -30,15 +30,6 @@ export function AppShell({
 }) {
   const path = usePathname();
   return (
-<<<<<<< HEAD
-    <div className="min-h-dvh bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r bg-sidebar p-4 md:flex md:flex-col">
-        <div className="mb-6 px-2">
-          <p className="text-xs font-medium tracking-wide text-amber-800/70 uppercase">
-            MS Constructions
-          </p>
-          <p className="mt-1 truncate text-lg font-semibold">{projectName}</p>
-=======
     <div className="min-h-dvh bg-[#f7f7f5] text-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-white p-5 md:flex md:flex-col">
         <div className="mb-8 px-2">
@@ -49,7 +40,6 @@ export function AppShell({
               <p className="truncate font-semibold">{projectName}</p>
             </div>
           </div>
->>>>>>> e86bc13 (fix: new page)
         </div>
         <nav className="flex flex-1 flex-col gap-1.5">
           {NAV.map((item) => {

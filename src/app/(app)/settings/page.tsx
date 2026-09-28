@@ -36,12 +36,16 @@ function SettingsInner() {
 
   useEffect(() => {
     if (!settings.data) return;
+    // Form fields intentionally mirror the loaded server settings when the query resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(settings.data.projectName ?? "");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBudget(settings.data.budgetTotal != null ? String(settings.data.budgetTotal) : "");
     const next: Record<string, string> = {};
     for (const c of EXPENSE_CATEGORIES) {
       next[c] = settings.data.budgetByCategory?.[c] != null ? String(settings.data.budgetByCategory[c]) : "";
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCats(next);
   }, [settings.data]);
 

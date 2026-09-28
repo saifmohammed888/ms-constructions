@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { Readable } from "stream";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { getDb, getSettingsRow } from "@/lib/db";
 import { settings } from "@/lib/schema";
@@ -193,7 +194,6 @@ export async function uploadDriveFile(opts: {
 }
 
 function BufferReadable(buf: Buffer) {
-  const { Readable } = require("stream") as typeof import("stream");
   return Readable.from(buf);
 }
 

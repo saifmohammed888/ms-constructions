@@ -95,6 +95,8 @@ function ExpensesInner() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* This is a file download endpoint, so it intentionally uses a native anchor. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a
             href="/api/expenses/export"
             className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm font-medium"
