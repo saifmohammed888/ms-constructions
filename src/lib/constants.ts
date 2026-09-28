@@ -7,6 +7,7 @@ export const EXPENSE_CATEGORIES = [
   "plumbing",
   "finishing",
   "labour",
+  "materials",
   "misc",
 ] as const;
 
@@ -54,6 +55,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   plumbing: "Plumbing",
   finishing: "Finishing",
   labour: "Labour",
+  materials: "Materials",
   misc: "Misc",
 };
 
