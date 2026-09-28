@@ -120,13 +120,13 @@ export default function TasksPage() {
         </Button>
       </div>
 
-      <Input className="min-h-11" placeholder="Search tasks, goals, or notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Input className="min-h-11 rounded-xl bg-white" placeholder="Search tasks, goals, or notes" value={search} onChange={(e) => setSearch(e.target.value)} />
 
-      <div className="grid grid-cols-3 rounded-xl border p-1">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {(["week", "month", "goal"] as View[]).map((v) => (
           <button
             key={v}
-            className={`min-h-11 rounded-lg text-sm font-medium capitalize ${view === v ? "bg-primary text-primary-foreground" : ""}`}
+            className={`min-h-10 whitespace-nowrap rounded-lg border px-4 text-sm font-medium capitalize ${view === v ? "border-zinc-950 bg-zinc-950 text-white" : "bg-white text-muted-foreground hover:bg-zinc-50"}`}
             onClick={() => setView(v)}
           >
             By {v}
@@ -134,9 +134,9 @@ export default function TasksPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 rounded-xl border bg-white p-1">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {(["active", "completed", "all"] as const).map((v) => (
-          <button key={v} className={`min-h-10 rounded-lg text-sm font-medium capitalize ${statusView === v ? "bg-emerald-600 text-white" : "text-muted-foreground"}`} onClick={() => setStatusView(v)}>
+          <button key={v} className={`min-h-10 whitespace-nowrap rounded-lg border px-4 text-sm font-medium capitalize ${statusView === v ? "border-zinc-950 bg-zinc-950 text-white" : "bg-white text-muted-foreground hover:bg-zinc-50"}`} onClick={() => setStatusView(v)}>
             {v} {v === "completed" ? `(${completedCount})` : v === "all" ? `(${totalTasks})` : ""}
           </button>
         ))}

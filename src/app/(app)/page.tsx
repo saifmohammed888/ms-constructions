@@ -14,7 +14,6 @@ import { formatDate, formatInr } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/constants";
 import { PageLoader } from "@/components/ui/spinner";
 import Link from "next/link";
-import { AskProject } from "@/components/ask-project";
 
 type Dash = {
   projectName: string;
@@ -89,6 +88,8 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      <SitePhotoCarousel photos={d.recentPhotos} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <QuickAction icon={Receipt} label="Expense" onClick={() => setExpenseOpen(true)} />
@@ -185,10 +186,6 @@ export default function DashboardPage() {
           {d.duePayments.length === 0 ? <p className="text-sm text-muted-foreground">No pending payments.</p> : d.duePayments.map((p) => <div key={p.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"><span>{EXPENSE_CATEGORY_LABELS[p.category as ExpenseCategory] ?? p.category}<span className="ml-2 text-xs text-muted-foreground">{p.dueDate ? formatDate(p.dueDate) : "No due date"}</span></span><span className="font-semibold text-amber-800">{formatInr(p.amount)}</span></div>)}
         </CardContent>
       </Card>
-
-      <AskProject />
-
-      <SitePhotoCarousel photos={d.recentPhotos} />
 
       <ExpenseForm open={expenseOpen} onOpenChange={setExpenseOpen} />
       <TaskForm open={taskOpen} onOpenChange={setTaskOpen} />

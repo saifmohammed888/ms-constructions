@@ -81,8 +81,16 @@ export function FileThumb({
       </div>
     );
   }
-  const Icon = t === "pdf" ? FileText : /xls|xlsx|csv/.test(ext.toLowerCase()) ? FileSpreadsheet : /doc|docx/.test(ext.toLowerCase()) ? FileType2 : FileText;
-  const label = t === "pdf" ? "PDF document" : `${ext} document`;
+  if (t === "pdf") {
+    return (
+      <div className="relative h-full w-full overflow-hidden bg-stone-100">
+        <iframe title={`${doc.name} preview`} src={`/api/documents/${doc.id}/file#page=1&view=FitH`} className="pointer-events-none absolute inset-0 h-[160%] w-full origin-top scale-[.72] bg-white" />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 text-xs font-semibold text-white">PDF · {doc.name}</div>
+      </div>
+    );
+  }
+  const Icon = /xls|xlsx|csv/.test(ext.toLowerCase()) ? FileSpreadsheet : /doc|docx/.test(ext.toLowerCase()) ? FileType2 : FileText;
+  const label = `${ext} document`;
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-stone-50 to-stone-200 p-4 text-center text-muted-foreground">
       <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-zinc-800 shadow-sm"><Icon className="size-7" /></span>
