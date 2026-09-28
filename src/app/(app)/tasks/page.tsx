@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { CheckCircle2, Plus, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +21,7 @@ type Task = {
   gcalEventId: string | null;
   calendarSyncError: string | null;
   sortOrder: number;
+  completedAt: string | null;
 };
 
 type View = "week" | "month" | "goal";
@@ -30,6 +31,7 @@ export default function TasksPage() {
   const [view, setView] = useState<View>("week");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [statusView, setStatusView] = useState<"active" | "completed" | "all">("active");
   const list = useQuery({
     queryKey: ["tasks"],
     queryFn: () => fetch("/api/tasks").then((r) => r.json()) as Promise<Task[]>,
@@ -65,7 +67,9 @@ export default function TasksPage() {
   });
 
   const today = todayIso();
-  const tasks = list.data ?? [];
+  const tasks = useMemo(() => (list.data ?? []).filter((task) => statusView === "all" || (statusView === "completed" ? task.status === "done" : task.status !== "done")), [list.data, statusView]);
+  const totalTasks = list.data?.length ?? 0;
+  const completedCount = (list.data ?? []).filter((task) => task.status === "done").length;
   const overdue = tasks.filter((t) => t.status !== "done" && t.dueDate && t.dueDate < today);
 
   const groups = useMemo(() => {
@@ -128,6 +132,14 @@ export default function TasksPage() {
         ))}
       </div>
 
+      <div className="grid grid-cols-3 rounded-xl border bg-white p-1">
+        {(["active", "completed", "all"] as const).map((v) => (
+          <button key={v} className={`min-h-10 rounded-lg text-sm font-medium capitalize ${statusView === v ? "bg-emerald-600 text-white" : "text-muted-foreground"}`} onClick={() => setStatusView(v)}>
+            {v} {v === "completed" ? `(${completedCount})` : v === "all" ? `(${totalTasks})` : ""}
+          </button>
+        ))}
+      </div>
+
       {overdue.length > 0 && (
         <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-3">
           <p className="mb-2 text-sm font-medium text-destructive">Overdue</p>
@@ -149,10 +161,8 @@ export default function TasksPage() {
         <CardSkeleton rows={4} />
       ) : tasks.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
-          <p className="font-medium">No tasks yet</p>
-          <Button className="mt-4 min-h-11" onClick={() => setOpen(true)}>
-            Add your first task
-          </Button>
+          <p className="font-medium">{statusView === "completed" ? "No completed tasks yet" : "No tasks yet"}</p>
+          {statusView !== "completed" && <Button className="mt-4 min-h-11" onClick={() => setOpen(true)}>Add your first task</Button>}
         </div>
       ) : (
         groups.map(([key, items]) => (
@@ -199,11 +209,11 @@ function TaskRow({
   onDown?: () => void;
 }) {
   return (
-    <div className={`flex items-start gap-2 rounded-lg px-1 py-2 ${task.status === "done" ? "opacity-60" : ""}`}>
+    <div className={`flex items-start gap-2 rounded-lg px-2 py-2 ${task.status === "done" ? "bg-emerald-50 text-emerald-950" : ""}`}>
       <Checkbox className="mt-2" checked={task.status === "done"} onCheckedChange={onToggle} />
       <div className="min-w-0 flex-1">
-        <p className={`text-sm ${overdue ? "text-destructive" : ""}`}>{task.title}</p>
-        <p className="text-xs text-muted-foreground">{formatDate(task.dueDate)}</p>
+        <p className={`flex items-center gap-1.5 text-sm ${overdue ? "text-destructive" : ""} ${task.status === "done" ? "font-medium line-through decoration-emerald-600/60" : ""}`}>{task.status === "done" && <CheckCircle2 className="size-4 text-emerald-600" />}{task.title}</p>
+        <p className="text-xs text-muted-foreground">{task.status === "done" ? `Completed ${formatDate(task.completedAt || task.dueDate)}` : formatDate(task.dueDate)}</p>
         {task.calendarSyncError && (
           <button className="mt-1 text-xs text-destructive underline" onClick={onSync}>
             {task.calendarSyncError}
