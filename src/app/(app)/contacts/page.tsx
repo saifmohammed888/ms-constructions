@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronsUpDown, Phone, Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronsUpDown, MessageCircle, Phone, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,8 @@ export default function ContactsPage() {
   const items = useMemo(() => [...(list.data ?? [])].sort((a, b) => { const av = a[sort.key].toLowerCase(); const bv = b[sort.key].toLowerCase(); return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.direction === "asc" ? 1 : -1); }), [list.data, sort]);
   const toggleSort = (key: "name" | "role") => setSort((s) => ({ key, direction: s.key === key && s.direction === "asc" ? "desc" : "asc" }));
 
+  const whatsappUrl = (phone: string) => `https://wa.me/${phone.replace(/\D/g, "")}`;
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
@@ -88,7 +90,7 @@ export default function ContactsPage() {
           </Button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[720px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Name" onClick={() => toggleSort("name")} /></th><th className="px-4 py-3"><SortButton label="Role" onClick={() => toggleSort("role")} /></th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Work / tags</th><th className="w-32 px-4 py-3" /></tr></thead><tbody>{items.map((c) => <tr key={c.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3"><button className="font-medium hover:underline" onClick={() => setDetail(c.id)}>{c.name}</button></td><td className="px-4 py-3 text-muted-foreground">{CONTACT_ROLE_LABELS[c.role as ContactRole] ?? c.role}</td><td className="px-4 py-3">{c.phone ? <a className="inline-flex items-center gap-1 text-sm underline" href={`tel:${c.phone}`}><Phone className="size-3.5" />{c.phone}</a> : "—"}</td><td className="max-w-[280px] px-4 py-3 text-muted-foreground">{c.tags?.length ? c.tags.join(" · ") : c.notes ? <span className="line-clamp-1" title={c.notes}>{c.notes}</span> : "—"}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => { setEditing(c); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => del.mutate(c.id)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Name" onClick={() => toggleSort("name")} /></th><th className="px-4 py-3"><SortButton label="Role" onClick={() => toggleSort("role")} /></th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Work / tags</th><th className="w-32 px-4 py-3" /></tr></thead><tbody>{items.map((c) => <tr key={c.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3"><button className="font-medium hover:underline" onClick={() => setDetail(c.id)}>{c.name}</button></td><td className="px-4 py-3 text-muted-foreground">{CONTACT_ROLE_LABELS[c.role as ContactRole] ?? c.role}</td><td className="px-4 py-3"><div className="flex items-center gap-3">{c.phone ? <><a className="inline-flex items-center gap-1 text-sm underline" href={`tel:${c.phone}`}><Phone className="size-3.5" />{c.phone}</a><a className="inline-flex size-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700" href={whatsappUrl(c.phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${c.name}`} title="WhatsApp"><MessageCircle className="size-4" /></a></> : "—"}</div></td><td className="max-w-[280px] px-4 py-3 text-muted-foreground">{c.tags?.length ? c.tags.join(" · ") : c.notes ? <span className="line-clamp-1" title={c.notes}>{c.notes}</span> : "—"}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => { setEditing(c); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => del.mutate(c.id)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <ContactForm key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} initial={editing ?? undefined} />
@@ -115,11 +117,7 @@ function ContactDetail({ id, onClose }: { id: string | null; onClose: () => void
         {d && (
           <div className="flex flex-col gap-3 text-sm">
             <p>{d.notes || "No notes"}</p>
-            {d.phone && (
-              <a className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary text-primary-foreground" href={`tel:${d.phone}`}>
-                Call {d.phone}
-              </a>
-            )}
+            {d.phone && <div className="grid grid-cols-2 gap-2"><a className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground" href={`tel:${d.phone}`}><Phone className="size-4" />Call</a><a className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 text-white" href={`https://wa.me/${d.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="size-4" />WhatsApp</a></div>}
             <p className="font-medium">Paid to this person: {formatInr(d.totalPaid ?? 0)}</p>
             <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
               {(d.expenses ?? []).map((e: { id: string; amount: string; date: string; category: string }) => (
