@@ -30,6 +30,7 @@ export async function GET() {
   );
   const thisWeek = [...overdue, ...upcoming].slice(0, 5);
   const recent = [...all].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 3);
+  const duePayments = all.filter((e) => e.paymentStatus === "due").sort((a, b) => (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1).slice(0, 5);
 
   return NextResponse.json({
     projectName: row?.projectName ?? "My Construction",
@@ -41,6 +42,7 @@ export async function GET() {
     thisWeek,
     overdueCount: overdue.length,
     recent,
+    duePayments,
     setupComplete: row?.setupComplete ?? false,
     gcalConnected: row?.gcalConnected ?? false,
   });

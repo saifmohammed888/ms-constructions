@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
       date: parsed.data.date,
       contactId: parsed.data.contactId || null,
       paymentMode: parsed.data.paymentMode || null,
+      paymentStatus: parsed.data.paymentStatus ?? "paid",
+      dueDate: parsed.data.dueDate || null,
       notes: parsed.data.notes || null,
       receiptDocId: parsed.data.receiptDocId || null,
     })

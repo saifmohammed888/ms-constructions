@@ -41,10 +41,14 @@ CREATE TABLE IF NOT EXISTS expenses (
   date date NOT NULL DEFAULT current_date,
   contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
   payment_mode text,
+  payment_status text NOT NULL DEFAULT 'paid',
+  due_date date,
   notes text,
   receipt_doc_id uuid REFERENCES documents(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'paid';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS due_date date;
 CREATE TABLE IF NOT EXISTS tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,

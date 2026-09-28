@@ -11,6 +11,7 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const PAYMENT_MODES = ["cash", "upi", "bank", "cheque"] as const;
+export const PAYMENT_STATUSES = ["paid", "due"] as const;
 
 export const CONTACT_ROLES = [
   "architect",
@@ -38,6 +39,7 @@ export const TASK_STATUSES = ["todo", "done"] as const;
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 export type PaymentMode = (typeof PAYMENT_MODES)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type ContactRole = (typeof CONTACT_ROLES)[number];
 export type DocCategory = (typeof DOC_CATEGORIES)[number];
 export type TaskGroupType = (typeof TASK_GROUP_TYPES)[number];
@@ -61,6 +63,7 @@ export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
   bank: "Bank transfer",
   cheque: "Cheque",
 };
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = { paid: "Paid", due: "Due" };
 
 export const CONTACT_ROLE_LABELS: Record<ContactRole, string> = {
   architect: "Architect",

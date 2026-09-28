@@ -25,6 +25,7 @@ type Dash = {
   thisWeek: { id: string; title: string; dueDate: string | null; status: string }[];
   overdueCount: number;
   recent: { id: string; amount: string; category: string; date: string }[];
+  duePayments: { id: string; amount: string; category: string; dueDate: string | null; notes: string | null }[];
   setupComplete: boolean;
 };
 
@@ -174,6 +175,13 @@ export default function DashboardPage() {
               </div>
             ))
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-amber-200 bg-amber-50/60 shadow-sm">
+        <CardHeader><CardTitle className="text-base">Upcoming payments</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {d.duePayments.length === 0 ? <p className="text-sm text-muted-foreground">No pending payments.</p> : d.duePayments.map((p) => <div key={p.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"><span>{EXPENSE_CATEGORY_LABELS[p.category as ExpenseCategory] ?? p.category}<span className="ml-2 text-xs text-muted-foreground">{p.dueDate ? formatDate(p.dueDate) : "No due date"}</span></span><span className="font-semibold text-amber-800">{formatInr(p.amount)}</span></div>)}
         </CardContent>
       </Card>
 

@@ -61,6 +61,8 @@ export const expenses = pgTable(
     date: date("date").notNull().default(sql`current_date`),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     paymentMode: text("payment_mode"),
+    paymentStatus: text("payment_status").notNull().default("paid"),
+    dueDate: date("due_date"),
     notes: text("notes"),
     receiptDocId: uuid("receipt_doc_id").references(() => documents.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -32,6 +32,8 @@ type Expense = {
   date: string;
   contactId?: string | null;
   paymentMode?: string | null;
+  paymentStatus?: string;
+  dueDate?: string | null;
   notes?: string | null;
   receiptDocId?: string | null;
 };
@@ -62,6 +64,8 @@ export function ExpenseForm({
   const [date, setDate] = useState(initial?.date ?? todayIso());
   const [contactId, setContactId] = useState(initial?.contactId ?? "");
   const [paymentMode, setPaymentMode] = useState(initial?.paymentMode ?? "");
+  const [paymentStatus, setPaymentStatus] = useState(initial?.paymentStatus ?? "paid");
+  const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [receipt, setReceipt] = useState<File | null>(null);
 
@@ -83,6 +87,8 @@ export function ExpenseForm({
         date,
         contactId: contactId || null,
         paymentMode: paymentMode || null,
+        paymentStatus,
+        dueDate: paymentStatus === "due" ? dueDate || null : null,
         notes: notes || null,
         receiptDocId,
       };
@@ -179,6 +185,14 @@ export function ExpenseForm({
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <Label>Payment status</Label>
+          <Select value={paymentStatus} onValueChange={(v) => v && setPaymentStatus(String(v))}>
+            <SelectTrigger className="mt-1.5 min-h-11 w-full"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="paid">Paid</SelectItem><SelectItem value="due">Due / pending</SelectItem></SelectContent>
+          </Select>
+          {paymentStatus === "due" && <Input type="date" className="mt-2 min-h-11" value={dueDate ?? ""} onChange={(e) => setDueDate(e.target.value)} aria-label="Payment due date" />}
         </div>
         <div>
           <Label htmlFor="notes">Notes</Label>

@@ -4,6 +4,7 @@ import {
   DOC_CATEGORIES,
   EXPENSE_CATEGORIES,
   PAYMENT_MODES,
+  PAYMENT_STATUSES,
   TASK_GROUP_TYPES,
   TASK_STATUSES,
 } from "@/lib/constants";
@@ -28,6 +29,8 @@ export const expenseSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   contactId: z.string().uuid().optional().nullable(),
   paymentMode: z.enum(PAYMENT_MODES).optional().nullable(),
+  paymentStatus: z.enum(PAYMENT_STATUSES).optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   receiptDocId: z.string().uuid().optional().nullable(),
 });
