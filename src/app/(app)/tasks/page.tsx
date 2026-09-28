@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Plus, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { CheckCircle2, Eye, Plus, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { TaskForm } from "@/components/task-form";
 import { CardSkeleton } from "@/components/ui/spinner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, formatMonthLabel, formatWeekLabel, isoWeekKey, monthKey, todayIso } from "@/lib/format";
 
 type Task = {
@@ -32,6 +32,7 @@ export default function TasksPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
   const [statusView, setStatusView] = useState<"active" | "completed" | "all">("active");
+  const [detail, setDetail] = useState<Task | null>(null);
   const list = useQuery({
     queryKey: ["tasks"],
     queryFn: () => fetch("/api/tasks").then((r) => r.json()) as Promise<Task[]>,
@@ -113,7 +114,7 @@ export default function TasksPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Tasks</h1>
-          <p className="text-sm text-muted-foreground">Plan the week. Calendar sync is one-way (app → Google).</p>
+          <p className="text-sm text-muted-foreground">Plan the work. Keep every completed task as part of the project record.</p>
         </div>
         <Button className="min-h-11" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="size-4" /> Add
@@ -149,7 +150,7 @@ export default function TasksPage() {
               task={t}
               overdue
               onToggle={() => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })}
-              onSync={() => patch.mutate({ id: t.id, body: { syncCalendar: !t.gcalEventId } })}
+              onView={() => setDetail(t)}
               onEdit={() => { setEditing(t); setOpen(true); }}
               onDelete={() => del.mutate(t.id)}
             />
@@ -173,7 +174,7 @@ export default function TasksPage() {
                 key={t.id}
                 task={t}
                 onToggle={() => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })}
-                onSync={() => patch.mutate({ id: t.id, body: { syncCalendar: !t.gcalEventId } })}
+                onView={() => setDetail(t)}
                 onEdit={() => { setEditing(t); setOpen(true); }}
                 onDelete={() => del.mutate(t.id)}
                 onUp={() => move(items, i, -1)}
@@ -185,6 +186,7 @@ export default function TasksPage() {
       )}
 
       <TaskForm key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} initial={editing ?? undefined} />
+      <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && setDetail(null)}><DialogContent><DialogHeader><DialogTitle>{detail?.title}</DialogTitle></DialogHeader>{detail && <div className="flex flex-col gap-3 text-sm"><p><span className="text-muted-foreground">Status:</span> {detail.status === "done" ? "Completed" : "Pending"}</p><p><span className="text-muted-foreground">Due:</span> {formatDate(detail.dueDate)}</p>{detail.goalLabel && <p><span className="text-muted-foreground">Goal:</span> {detail.goalLabel}</p>}<p className="whitespace-pre-wrap"><span className="text-muted-foreground">Notes:</span> {detail.notes || "No notes"}</p></div>}</DialogContent></Dialog>
     </div>
   );
 }
@@ -193,7 +195,7 @@ function TaskRow({
   task,
   overdue,
   onToggle,
-  onSync,
+  onView,
   onEdit,
   onDelete,
   onUp,
@@ -202,7 +204,7 @@ function TaskRow({
   task: Task;
   overdue?: boolean;
   onToggle: () => void;
-  onSync: () => void;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onUp?: () => void;
@@ -214,20 +216,8 @@ function TaskRow({
       <div className="min-w-0 flex-1">
         <p className={`flex items-center gap-1.5 text-sm ${overdue ? "text-destructive" : ""} ${task.status === "done" ? "font-medium line-through decoration-emerald-600/60" : ""}`}>{task.status === "done" && <CheckCircle2 className="size-4 text-emerald-600" />}{task.title}</p>
         <p className="text-xs text-muted-foreground">{task.status === "done" ? `Completed ${formatDate(task.completedAt || task.dueDate)}` : formatDate(task.dueDate)}</p>
-        {task.calendarSyncError && (
-          <button className="mt-1 text-xs text-destructive underline" onClick={onSync}>
-            {task.calendarSyncError}
-          </button>
-        )}
-        {task.gcalEventId && !task.calendarSyncError && (
-          <Badge variant="secondary" className="mt-1">
-            On calendar
-          </Badge>
-        )}
       </div>
-      <Button variant="ghost" size="icon" className="min-h-11 min-w-11" title="Sync to Calendar" disabled={!task.dueDate} onClick={onSync}>
-        🏗
-      </Button>
+      <Button variant="ghost" size="icon" className="min-h-11 min-w-11" title="View task" onClick={onView}><Eye className="size-4" /></Button>
       {onUp && (
         <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={onUp}>
           <ArrowUp className="size-4" />
