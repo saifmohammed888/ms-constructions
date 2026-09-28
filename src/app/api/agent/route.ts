@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ answer: result.text });
   } catch (error) {
     console.error("Project AI request failed", error);
-    return NextResponse.json({ error: "Project AI could not answer right now. Check the AI provider configuration." }, { status: 502 });
+    const detail = error instanceof Error ? error.message.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 240) : "Unknown provider error";
+    return NextResponse.json({ error: `Project AI request failed: ${detail}` }, { status: 502 });
   }
 }
