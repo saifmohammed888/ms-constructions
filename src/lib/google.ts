@@ -99,17 +99,42 @@ async function driveFromRefresh(refreshToken: string) {
   return google.drive({ version: "v3", auth: client });
 }
 
+const folderLocks = new Map<string, Promise<string>>();
+
 async function findOrCreateFolder(drive: ReturnType<typeof google.drive>, name: string, parentId?: string) {
-  const created = await drive.files.create({
-    requestBody: {
-      name,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: parentId ? [parentId] : undefined,
-    },
-    fields: "id",
-  });
-  if (!created.data.id) throw new Error(`Could not create Drive folder: ${name}`);
-  return created.data.id;
+  const key = `${parentId || "root"}:${name}`;
+  const existingLock = folderLocks.get(key);
+  if (existingLock) return existingLock;
+
+  const operation = (async () => {
+    const escapedName = name.replace(/'/g, "\\'");
+    const parentFilter = parentId ? `'${parentId}' in parents and ` : "";
+    const existing = await drive.files.list({
+      q: `${parentFilter}name='${escapedName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id,name)",
+      spaces: "drive",
+      pageSize: 1,
+    });
+    const match = existing.data.files?.[0]?.id;
+    if (match) return match;
+
+    const created = await drive.files.create({
+      requestBody: {
+        name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: parentId ? [parentId] : undefined,
+      },
+      fields: "id",
+    });
+    if (!created.data.id) throw new Error(`Could not create Drive folder: ${name}`);
+    return created.data.id;
+  })();
+  folderLocks.set(key, operation);
+  try {
+    return await operation;
+  } finally {
+    folderLocks.delete(key);
+  }
 }
 
 export async function ensureDriveTree(refreshToken: string, projectName: string) {
