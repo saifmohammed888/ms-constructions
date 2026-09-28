@@ -17,9 +17,11 @@ export function AskProject() {
     setAnswer("");
     try {
       const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: { answer?: string; error?: string } = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { data = {}; }
       if (!res.ok) throw new Error(data.error || "Could not answer");
-      setAnswer(data.answer);
+      setAnswer(data.answer || "No answer returned.");
       setQuestion("");
     } catch (error) {
       setAnswer(error instanceof Error ? error.message : "Could not answer right now.");
