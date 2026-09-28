@@ -28,6 +28,7 @@ type Doc = {
   thumbnailUrl: string | null;
   webViewLink: string | null;
   mimeType: string | null;
+  sizeBytes: number | null;
   category: string;
   tags: string[];
   uploadedAt: string;
@@ -124,6 +125,15 @@ export default function DocumentsPage() {
   });
 
   const items = [...(list.data ?? [])].sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : b.uploadedAt.localeCompare(a.uploadedAt));
+  const allDocuments = list.data ?? [];
+  const isImage = (doc: Doc) => doc.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(doc.name);
+  const imageDocuments = allDocuments.filter(isImage);
+  const photoBytes = imageDocuments.reduce((sum, doc) => sum + (doc.sizeBytes ?? 0), 0);
+  const documentBytes = allDocuments.filter((doc) => !isImage(doc)).reduce((sum, doc) => sum + (doc.sizeBytes ?? 0), 0);
+  const imageCategories = Object.entries(imageDocuments.reduce<Record<string, number>>((counts, doc) => {
+    counts[doc.category] = (counts[doc.category] ?? 0) + 1;
+    return counts;
+  }, {}));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -198,6 +208,13 @@ export default function DocumentsPage() {
         ))}
       </div>
 
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Library summary">
+        <LibraryStat label="Total files" value={`${allDocuments.length}`} detail="Documents and images" />
+        <LibraryStat label="Images" value={`${imageDocuments.length}`} detail={imageCategories.length ? imageCategories.map(([key, count]) => `${DOC_CATEGORY_LABELS[key as DocCategory] ?? key}: ${count}`).join(" · ") : "No images yet"} />
+        <LibraryStat label="Photo storage" value={formatBytes(photoBytes)} detail="Image files" />
+        <LibraryStat label="Document storage" value={formatBytes(documentBytes)} detail="PDFs and other files" />
+      </section>
+
       {list.isLoading ? (
         <CardSkeleton rows={6} />
       ) : (list.data?.length ?? 0) === 0 ? (
@@ -206,7 +223,7 @@ export default function DocumentsPage() {
           <p className="mt-1 text-sm text-muted-foreground">Upload a drawing or approval PDF.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Document" onClick={() => setSort("name")} /></th><th className="px-4 py-3">Category</th><th className="px-4 py-3"><SortButton label="Added" onClick={() => setSort("uploadedAt")} /></th><th className="w-40 px-4 py-3" /></tr></thead><tbody>{items.map((doc) => <tr key={doc.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-2"><button className="flex items-center gap-3 text-left" onClick={() => setPreview(doc)}><span className="size-12 shrink-0 overflow-hidden rounded-lg border bg-zinc-50"><FileThumb doc={doc} /></span><span className="font-medium">{doc.name}</span></button></td><td className="px-4 py-3 text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="px-4 py-3 text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View document" onClick={() => setPreview(doc)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Rename document" onClick={() => setEditing(doc)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete document" onClick={() => setPendingDelete(doc)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Document" onClick={() => setSort("name")} /></th><th className="px-4 py-3">Category</th><th className="px-4 py-3"><SortButton label="Added" onClick={() => setSort("uploadedAt")} /></th><th className="w-40 px-4 py-3" /></tr></thead><tbody>{items.map((doc) => <tr key={doc.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-2"><div className="group relative"><button className="flex items-center gap-3 text-left" onClick={() => setPreview(doc)}><span className="size-10 shrink-0 overflow-hidden rounded-lg border bg-zinc-50"><FileThumb doc={doc} /></span><span className="font-medium">{doc.name}</span></button><div className="pointer-events-none invisible absolute bottom-full left-0 z-10 mb-2 w-64 rounded-xl border bg-zinc-950 p-3 text-left text-xs text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"><p className="font-medium">{doc.name}</p><p className="mt-1 text-white/70">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category} · Added {formatDate(doc.uploadedAt)}</p>{doc.tags?.length ? <p className="mt-1 text-white/70">{doc.tags.join(" · ")}</p> : null}</div></div></td><td className="px-4 py-3 text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="px-4 py-3 text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View document" onClick={() => setPreview(doc)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Rename document" onClick={() => setEditing(doc)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete document" onClick={() => setPendingDelete(doc)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <Dialog open={Boolean(preview)} onOpenChange={(o) => !o && setPreview(null)}>
@@ -261,6 +278,17 @@ export default function DocumentsPage() {
 }
 
 function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }
+
+function formatBytes(bytes: number) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function LibraryStat({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return <div className="rounded-2xl border bg-white p-4 shadow-sm"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold tracking-tight">{value}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{detail}</p></div>;
+}
 
 function DocEditForm({
   doc,
