@@ -49,7 +49,7 @@ function LoginInner() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(221,183,111,.23),transparent_52%)]" />
           <div className="absolute inset-6 rounded-[1.5rem] border border-[#d9bd83]/30 sm:inset-10" />
           <div className="absolute inset-8 sm:inset-14">
-            <Image src="/floor-plans/dual-ensuite-recommended.svg.png" alt="Recommended Kothanur construction floor plan" fill priority sizes="(max-width: 1024px) 100vw, 58vw" className="object-contain p-2 mix-blend-screen opacity-90 sm:p-5" />
+            <Image src="/login-site-photo.png" alt="Kothanur construction site" fill priority sizes="(max-width: 1024px) 100vw, 58vw" className="object-cover p-2 opacity-90 sm:p-5" />
           </div>
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#11191a] via-[#11191a]/80 to-transparent p-7 pt-28 text-white sm:p-10 sm:pt-36">
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.25em] text-[#e4c98f]"><Compass className="size-4" /> Site plan / 01</div>
