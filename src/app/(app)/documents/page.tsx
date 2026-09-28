@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronsUpDown, Eye, FileUp, Pencil, Trash2, Upload } from "lucide-react";
+import { Eye, FileUp, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -38,7 +38,6 @@ export default function DocumentsPage() {
   const qc = useQueryClient();
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"name" | "uploadedAt">("uploadedAt");
   const [preview, setPreview] = useState<Doc | null>(null);
   const [editing, setEditing] = useState<Doc | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Doc | null>(null);
@@ -124,7 +123,7 @@ export default function DocumentsPage() {
     },
   });
 
-  const items = [...(list.data ?? [])].sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : b.uploadedAt.localeCompare(a.uploadedAt));
+  const items = [...(list.data ?? [])].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
   const allDocuments = list.data ?? [];
   const isImage = (doc: Doc) => doc.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(doc.name);
   const imageDocuments = allDocuments.filter(isImage);
@@ -224,7 +223,7 @@ export default function DocumentsPage() {
           <p className="mt-1 text-sm text-muted-foreground">Upload a drawing or approval PDF.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Document" onClick={() => setSort("name")} /></th><th className="px-4 py-3">Category</th><th className="px-4 py-3"><SortButton label="Added" onClick={() => setSort("uploadedAt")} /></th><th className="w-40 px-4 py-3" /></tr></thead><tbody>{items.map((doc) => <tr key={doc.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3"><div className="group relative"><button className="flex items-center gap-3 text-left" onClick={() => setPreview(doc)}><span className="size-16 shrink-0 overflow-hidden rounded-lg border bg-zinc-50"><FileThumb doc={doc} /></span><span className="min-w-0"><span className="block max-w-[340px] truncate font-medium">{doc.name}</span><span className="mt-1 block text-xs text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category} · {formatDate(doc.uploadedAt)}</span></span></button><div className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-64 rounded-xl border bg-zinc-950 p-3 text-left text-xs text-white opacity-0 shadow-xl transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"><p className="font-medium">{doc.name}</p><p className="mt-1 text-white/70">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category} · Added {formatDate(doc.uploadedAt)}</p>{doc.tags?.length ? <p className="mt-1 text-white/70">{doc.tags.join(" · ")}</p> : null}</div></div></td><td className="px-4 py-3 text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="px-4 py-3 text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View document" onClick={() => setPreview(doc)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Rename document" onClick={() => setEditing(doc)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete document" onClick={() => setPendingDelete(doc)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{items.map((doc) => <div key={doc.id} className="group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><button className="block w-full text-left" onClick={() => setPreview(doc)} aria-label={`View ${doc.name}`}><div className="aspect-square size-20 w-full overflow-hidden bg-zinc-50 sm:size-auto"> <FileThumb doc={doc} /></div><div className="p-3"><p className="truncate text-sm font-medium">{doc.name}</p><p className="mt-1 truncate text-xs text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</p></div><div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/20 to-transparent p-3 text-left text-xs text-white opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"><p className="line-clamp-2 font-medium">{doc.name}</p><p className="mt-1 text-white/75">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category} · {formatDate(doc.uploadedAt)}</p>{doc.tags?.length ? <p className="mt-1 line-clamp-1 text-white/75">{doc.tags.join(" · ")}</p> : null}</div></button><div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"><Button variant="secondary" size="icon" className="size-8 bg-white/90" title="Rename document" onClick={() => setEditing(doc)}><Pencil className="size-3.5" /></Button><Button variant="destructive" size="icon" className="size-8" title="Delete document" onClick={() => setPendingDelete(doc)}><Trash2 className="size-3.5" /></Button></div><button className="sr-only" onClick={() => setPreview(doc)}><Eye className="size-4" />View</button></div>)}</div>
       )}
 
       <Dialog open={Boolean(preview)} onOpenChange={(o) => !o && setPreview(null)}>
@@ -277,8 +276,6 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }
 
 function formatBytes(bytes: number) {
   if (!bytes) return "0 B";
