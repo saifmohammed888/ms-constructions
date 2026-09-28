@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, FileUp, Plus, Receipt, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, FileUp, Plus, Receipt, Sparkles, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,8 @@ type Dash = {
   recent: { id: string; amount: string; category: string; date: string }[];
   duePayments: { id: string; amount: string; category: string; dueDate: string | null; notes: string | null }[];
   recentPhotos: { id: string; name: string; mimeType: string | null; uploadedAt: string }[];
+  missingDocuments: string[];
+  currentStage: string;
   setupComplete: boolean;
 };
 
@@ -73,10 +75,10 @@ export default function DashboardPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase"><Sparkles className="size-3.5" /> Your project pulse</p>
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase"><Sparkles className="size-3.5" /> {d.projectName}</p>
           <h1 className="text-3xl font-semibold tracking-tight">Where things stand</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {d.overdueCount > 0 ? `${d.overdueCount} overdue task${d.overdueCount === 1 ? "" : "s"}` : "No overdue tasks"}
+            Active stage: {d.currentStage}
           </p>
         </div>
         <div className="hidden gap-2 sm:flex">
@@ -95,6 +97,12 @@ export default function DashboardPage() {
         <QuickAction icon={ClipboardIcon} label="Task" onClick={() => setTaskOpen(true)} />
         <QuickAction icon={Camera} label="Site update" href="/documents" />
       </div>
+
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="Project attention summary">
+        <AttentionCard href="/tasks" title="Work needing attention" value={d.overdueCount ? `${d.overdueCount} overdue` : "On track"} detail={d.thisWeek.length ? `${d.thisWeek.length} task${d.thisWeek.length === 1 ? "" : "s"} this week` : "No tasks due this week"} tone={d.overdueCount ? "red" : "green"} />
+        <AttentionCard href="/expenses" title="Payments to plan" value={formatInr(d.duePayments.reduce((sum, payment) => sum + Number(payment.amount), 0))} detail={`${d.duePayments.length} upcoming or overdue`} tone={d.duePayments.length ? "amber" : "green"} />
+        <AttentionCard href="/documents" title="Project records" value={d.missingDocuments.length ? `${d.missingDocuments.length} missing` : "Ready"} detail={d.missingDocuments.length ? d.missingDocuments.map((category) => category[0].toUpperCase() + category.slice(1)).join(", ") : "Core documents are present"} tone={d.missingDocuments.length ? "blue" : "green"} />
+      </section>
 
       <Card className="overflow-hidden rounded-2xl border-0 bg-zinc-950 text-white shadow-sm">
         <CardContent className="pt-6">
@@ -204,6 +212,11 @@ export default function DashboardPage() {
 function Insight({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "amber" | "green" | "blue" | "neutral" }) {
   const styles = { amber: "bg-amber-50 text-amber-900", green: "bg-emerald-50 text-emerald-900", blue: "bg-blue-50 text-blue-900", neutral: "bg-zinc-50 text-zinc-900" };
   return <div className={`rounded-xl p-4 ${styles[tone]}`}><p className="text-xs font-medium uppercase tracking-wide opacity-70">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p><p className="mt-1 text-xs opacity-70">{detail}</p></div>;
+}
+
+function AttentionCard({ href, title, value, detail, tone }: { href: string; title: string; value: string; detail: string; tone: "red" | "amber" | "blue" | "green" }) {
+  const styles = { red: "border-red-200 bg-red-50 text-red-950", amber: "border-amber-200 bg-amber-50 text-amber-950", blue: "border-blue-200 bg-blue-50 text-blue-950", green: "border-emerald-200 bg-emerald-50 text-emerald-950" };
+  return <Link href={href} className={`rounded-2xl border p-4 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${styles[tone]}`}><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium uppercase tracking-wide opacity-70">{title}</p>{tone === "red" && <TriangleAlert className="size-4" aria-hidden="true" />}</div><p className="mt-2 text-xl font-semibold">{value}</p><p className="mt-1 text-xs opacity-70">{detail}</p></Link>;
 }
 
 function SitePhotoCarousel({ photos }: { photos: Dash["recentPhotos"] }) {

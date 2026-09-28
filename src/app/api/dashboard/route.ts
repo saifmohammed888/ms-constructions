@@ -33,6 +33,10 @@ export async function GET() {
   const duePayments = all.filter((e) => e.paymentStatus === "due").sort((a, b) => (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1).slice(0, 5);
   const photoRows = await db.select({ id: documents.id, name: documents.name, mimeType: documents.mimeType, uploadedAt: documents.uploadedAt }).from(documents).where(eq(documents.category, "photos")).orderBy(desc(documents.uploadedAt)).limit(12);
   const recentPhotos = photoRows.filter((photo) => photo.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(photo.name)).slice(0, 5);
+  const documentCategories = await db.select({ category: documents.category }).from(documents);
+  const presentCategories = new Set(documentCategories.map((document) => document.category));
+  const missingDocuments = ["drawings", "approvals", "contracts"].filter((category) => !presentCategories.has(category));
+  const currentStage = allTasks.find((task) => task.status !== "done" && task.goalLabel)?.goalLabel ?? "Planning & coordination";
 
   return NextResponse.json({
     projectName: row?.projectName ?? "My Construction",
@@ -46,6 +50,8 @@ export async function GET() {
     recent,
     duePayments,
     recentPhotos,
+    missingDocuments,
+    currentStage,
     setupComplete: row?.setupComplete ?? false,
     gcalConnected: row?.gcalConnected ?? false,
   });
