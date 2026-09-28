@@ -14,6 +14,7 @@ import { formatDate, formatInr } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/constants";
 import { PageLoader } from "@/components/ui/spinner";
 import Link from "next/link";
+import { AskProject } from "@/components/ask-project";
 
 type Dash = {
   projectName: string;
@@ -175,6 +176,8 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <AskProject />
 
       <ExpenseForm open={expenseOpen} onOpenChange={setExpenseOpen} />
       <TaskForm open={taskOpen} onOpenChange={setTaskOpen} />
