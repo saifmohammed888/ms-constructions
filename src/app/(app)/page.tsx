@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, FileUp, Plus, Receipt, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, Copy, FileUp, Plus, Receipt, Sparkles, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,6 +37,7 @@ export default function DashboardPage() {
   const qc = useQueryClient();
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const dash = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
@@ -71,6 +73,21 @@ export default function DashboardPage() {
   }
   const d = dash.data!;
 
+  async function copyProjectData() {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/export");
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Could not export project data");
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      toast.success("Project data copied as JSON");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not copy project data");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -82,6 +99,9 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="hidden gap-2 sm:flex">
+          <Button variant="outline" className="min-h-11 rounded-xl" onClick={copyProjectData} disabled={exporting}>
+            <Copy className="size-4" /> {exporting ? "Copying…" : "Copy data"}
+          </Button>
           <Button className="min-h-11 rounded-xl" onClick={() => setExpenseOpen(true)}>
             <Plus className="size-4" /> Expense
           </Button>
@@ -89,6 +109,9 @@ export default function DashboardPage() {
             <Plus className="size-4" /> Task
           </Button>
         </div>
+        <Button variant="outline" size="icon" className="sm:hidden" onClick={copyProjectData} disabled={exporting} aria-label="Copy project data as JSON" title="Copy project data as JSON">
+          <Copy className="size-4" />
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

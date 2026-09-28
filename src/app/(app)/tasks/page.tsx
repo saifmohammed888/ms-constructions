@@ -23,6 +23,7 @@ type Task = {
   calendarSyncError: string | null;
   sortOrder: number;
   completedAt: string | null;
+  createdAt: string;
 };
 
 export default function TasksPage() {
@@ -72,6 +73,10 @@ export default function TasksPage() {
     const needle = search.trim().toLowerCase();
     const matchesSearch = !needle || [task.title, task.goalLabel, task.notes].some((value) => value?.toLowerCase().includes(needle));
     return matchesStatus && matchesSearch;
+  }).sort((a, b) => {
+    const aDate = a.createdAt || a.dueDate || "";
+    const bDate = b.createdAt || b.dueDate || "";
+    return bDate.localeCompare(aDate);
   }), [list.data, statusView, search]);
   const totalTasks = list.data?.length ?? 0;
   const completedCount = (list.data ?? []).filter((task) => task.status === "done").length;
