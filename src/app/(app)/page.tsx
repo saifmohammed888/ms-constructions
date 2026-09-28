@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { ArrowRight, Camera, ClipboardList as ClipboardIcon, FileUp, Plus, Receipt, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -71,29 +71,37 @@ export default function DashboardPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Where things stand</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase"><Sparkles className="size-3.5" /> Your project pulse</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Where things stand</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {d.overdueCount > 0 ? `${d.overdueCount} overdue task${d.overdueCount === 1 ? "" : "s"}` : "No overdue tasks"}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button className="min-h-11" onClick={() => setExpenseOpen(true)}>
+        <div className="hidden gap-2 sm:flex">
+          <Button className="min-h-11 rounded-xl" onClick={() => setExpenseOpen(true)}>
             <Plus className="size-4" /> Expense
           </Button>
-          <Button variant="outline" className="min-h-11" onClick={() => setTaskOpen(true)}>
+          <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => setTaskOpen(true)}>
             <Plus className="size-4" /> Task
           </Button>
         </div>
       </div>
 
-      <Card>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <QuickAction icon={Receipt} label="Expense" onClick={() => setExpenseOpen(true)} />
+        <QuickAction icon={FileUp} label="Upload" href="/documents" />
+        <QuickAction icon={ClipboardIcon} label="Task" onClick={() => setTaskOpen(true)} />
+        <QuickAction icon={Camera} label="Site update" href="/documents" />
+      </div>
+
+      <Card className="overflow-hidden rounded-2xl border-0 bg-zinc-950 text-white shadow-sm">
         <CardContent className="pt-6">
           <BudgetBar spent={d.totalSpent} budget={d.budgetTotal} />
         </CardContent>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="rounded-2xl border-black/5 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Spend by category</CardTitle>
           </CardHeader>
@@ -104,7 +112,7 @@ export default function DashboardPage() {
             />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="rounded-2xl border-black/5 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Monthly burn</CardTitle>
           </CardHeader>
@@ -114,7 +122,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="rounded-2xl border-black/5 shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">This week</CardTitle>
         </CardHeader>
@@ -141,7 +149,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl border-black/5 shadow-sm">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Recent expenses</CardTitle>
           <Link href="/expenses" className="text-sm underline">
@@ -172,4 +180,20 @@ export default function DashboardPage() {
       <TaskForm open={taskOpen} onOpenChange={setTaskOpen} />
     </div>
   );
+}
+
+function QuickAction({
+  icon: Icon,
+  label,
+  onClick,
+  href,
+}: {
+  icon: typeof Receipt;
+  label: string;
+  onClick?: () => void;
+  href?: string;
+}) {
+  const content = <><span className="flex size-9 items-center justify-center rounded-xl bg-zinc-100"><Icon className="size-4" /></span><span>{label}</span><ArrowRight className="ml-auto size-4 text-muted-foreground" /></>;
+  if (href) return <Link href={href} className="flex min-h-16 items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 text-sm font-medium shadow-sm transition-transform active:scale-[.98]">{content}</Link>;
+  return <button onClick={onClick} className="flex min-h-16 items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 text-left text-sm font-medium shadow-sm transition-transform active:scale-[.98]">{content}</button>;
 }

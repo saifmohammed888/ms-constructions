@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 1180" width="920" height="1180">
+  <rect width="920" height="1180" fill="#f7f5f1"/>
+  <style>
+    .wall { fill: #fff; stroke: #111; stroke-width: 5; }
+    .wall-in { fill: none; stroke: #111; stroke-width: 3.5; }
+    .thin { fill: none; stroke: #333; stroke-width: 1.4; }
+    .furn { fill: none; stroke: #2a6f8f; stroke-width: 1.8; }
+    .lbl { fill: #c31b1b; font-family: Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; text-anchor: middle; }
+    .lbl-sm { fill: #c31b1b; font-family: Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; text-anchor: middle; }
+    .dim { fill: #c31b1b; font-family: Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; text-anchor: middle; }
+    .note { fill: #111; font-family: Helvetica, Arial, sans-serif; font-size: 13px; }
+    .hatch { fill: url(#hatch); stroke: #888; stroke-width: 1.2; }
+    .green { fill: #c5d4b8; stroke: #6f8a5e; stroke-width: 1; }
+    .door { fill: none; stroke: #111; stroke-width: 1.6; }
+    .title { fill: #c31b1b; font-family: Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 800; text-anchor: middle; }
+  </style>
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#b9b9b9" stroke-width="1.4"/>
+    </pattern>
+  </defs>
+
+  <text class="title" x="460" y="42">DUAL ENSUITE  BOTH BEDROOMS ATTACHED TOILET</text>
+  <text class="lbl-sm" x="460" y="62">Same 30'-0" × 40'-0" typical floor · two south balconies kept · no common hall toilet</text>
+
+  <!-- outer dims -->
+  <line class="thin" x1="80" y1="88" x2="188" y2="88" stroke="#c31b1b"/>
+  <text class="dim" x="134" y="82">6'-0"</text>
+  <line class="thin" x1="188" y1="88" x2="728" y2="88" stroke="#c31b1b"/>
+  <text class="dim" x="458" y="82">30'-0"</text>
+  <line class="thin" x1="860" y1="118" x2="860" y2="838" stroke="#c31b1b"/>
+  <text class="dim" x="888" y="490" transform="rotate(90 888 490)">40'-0"</text>
+
+  <!-- setbacks -->
+  <rect class="green" x="188" y="100" width="567" height="27"/>
+  <rect class="green" x="728" y="100" width="27" height="738"/>
+  <text class="lbl-sm" x="470" y="118">1'-6"</text>
+  <text class="lbl-sm" x="742" y="470" transform="rotate(90 742 470)">1'-6"</text>
+
+  <!-- west balcony -->
+  <rect class="hatch" x="80" y="127" width="108" height="711"/>
+  <text class="lbl" x="134" y="470" transform="rotate(-90 134 470)">BAL 6' × 39'-6"</text>
+
+  <!-- building outline 30x40 @ 18px/ft: 540 x 720 starting 188,127 -->
+  <!-- 18px per foot -->
+  <rect class="wall" x="188" y="127" width="540" height="720"/>
+
+  <!-- STAIR 10x8 -->
+  <rect class="wall-in" x="188" y="127" width="180" height="144"/>
+  <g class="thin" transform="translate(198,137)">
+    <line x1="0" y1="0" x2="160" y2="0"/><line x1="0" y1="16" x2="160" y2="16"/>
+    <line x1="0" y1="32" x2="160" y2="32"/><line x1="0" y1="48" x2="160" y2="48"/>
+    <line x1="0" y1="64" x2="160" y2="64"/><line x1="0" y1="80" x2="160" y2="80"/>
+    <line x1="0" y1="96" x2="160" y2="96"/><line x1="0" y1="112" x2="110" y2="112"/>
+  </g>
+  <text class="lbl-sm" x="278" y="168">DN</text>
+  <text class="lbl-sm" x="278" y="248">UP</text>
+
+  <!-- LOBBY -->
+  <rect class="wall-in" x="368" y="127" width="90" height="144"/>
+  <text class="lbl" x="413" y="198">LOBBY</text>
+  <text class="lbl-sm" x="413" y="214">5' × 8'</text>
+  <path class="door" d="M458 271 A70 70 0 0 1 388 271"/>
+
+  <!-- LIFT -->
+  <rect class="wall-in" x="458" y="127" width="96" height="144"/>
+  <text class="lbl" x="506" y="190">LIFT</text>
+  <text class="lbl-sm" x="506" y="206">5'-4" × 5'-4"</text>
+  <rect class="thin" x="478" y="155" width="56" height="70"/>
+
+  <!-- UTILITY -->
+  <rect class="wall-in" x="554" y="127" width="174" height="144"/>
+  <text class="lbl" x="641" y="190">UTILITY</text>
+  <text class="lbl-sm" x="641" y="206">6'-2" × 5'-10"</text>
+  <rect class="furn" x="574" y="155" width="50" height="28"/>
+  <rect class="furn" x="640" y="155" width="60" height="90"/>
+
+  <!-- KITCHEN east, below utility 12 x 8 -->
+  <rect class="wall-in" x="512" y="271" width="216" height="144"/>
+  <text class="lbl" x="620" y="330">KITCHEN</text>
+  <text class="lbl-sm" x="620" y="346">11'-6" × 8'</text>
+  <rect class="furn" x="528" y="287" width="184" height="28"/>
+  <rect class="furn" x="684" y="315" width="28" height="84"/>
+  <circle class="furn" cx="560" cy="370" r="10"/>
+  <path class="door" d="M512 330 h-1"/>
+  <!-- kitchen door to living -->
+  <path class="door" d="M512 385 A40 40 0 0 1 512 345"/>
+
+  <!-- LIVING -->
+  <text class="lbl" x="360" y="400">LIVING / DINING</text>
+  <text class="lbl-sm" x="360" y="416">15'-6" × 14'</text>
+  <rect class="furn" x="210" y="300" width="28" height="110"/>
+  <rect class="furn" x="250" y="340" width="70" height="36"/>
+  <rect class="furn" x="210" y="430" width="120" height="28"/>
+  <rect class="furn" x="390" y="300" width="90" height="50"/>
+  <!-- dining 4-seater in living -->
+  <rect class="furn" x="400" y="370" width="70" height="46"/>
+  <circle class="furn" cx="415" cy="378" r="6"/>
+  <circle class="furn" cx="455" cy="378" r="6"/>
+  <circle class="furn" cx="415" cy="408" r="6"/>
+  <circle class="furn" cx="455" cy="408" r="6"/>
+  <!-- living to west balcony openings -->
+  <line class="thin" x1="188" y1="320" x2="188" y2="400" stroke="#fff" stroke-width="8"/>
+  <line class="thin" x1="188" y1="470" x2="188" y2="530" stroke="#fff" stroke-width="8"/>
+
+  <!-- MASTER ENSUITE  north of master, east side (relocated washroom) 8' x 8' -->
+  <rect class="wall-in" x="512" y="415" width="216" height="144"/>
+  <text class="lbl" x="620" y="468">MASTER ATTACHED</text>
+  <text class="lbl" x="620" y="484">TOILET</text>
+  <text class="lbl-sm" x="620" y="500">8'-0" × 8'-0"</text>
+  <!-- wc basin shower -->
+  <ellipse class="furn" cx="548" cy="470" rx="14" ry="18"/>
+  <rect class="furn" x="575" y="448" width="36" height="22"/>
+  <rect class="furn" x="640" y="448" width="70" height="90"/>
+  <text class="lbl-sm" x="675" y="496">SHWR</text>
+  <!-- door FROM master bedroom (south wall of toilet) -->
+  <path class="door" d="M560 559 A48 48 0 0 0 608 559"/>
+  <text class="lbl-sm" x="584" y="552">FROM BR</text>
+
+  <!-- LEFT BEDROOM -->
+  <rect class="wall-in" x="188" y="559" width="198" height="216"/>
+  <text class="lbl" x="287" y="720">BEDROOM 1</text>
+  <text class="lbl-sm" x="287" y="736">11'-0" × 12'-0"</text>
+  <rect class="furn" x="210" y="590" width="100" height="70"/>
+  <rect class="furn" x="210" y="668" width="90" height="22"/>
+  <!-- opening to west balcony -->
+  <line class="thin" x1="188" y1="600" x2="188" y2="680" stroke="#fff" stroke-width="8"/>
+
+  <!-- LEFT ATTACHED TOILET inside east of bedroom 1 : 5' x 8' -->
+  <rect class="wall-in" x="386" y="559" width="90" height="144"/>
+  <text class="lbl-sm" x="431" y="610">ATTACHED</text>
+  <text class="lbl-sm" x="431" y="624">TOILET 1</text>
+  <text class="lbl-sm" x="431" y="638">5' × 8'</text>
+  <ellipse class="furn" cx="410" cy="668" rx="12" ry="16"/>
+  <rect class="furn" x="430" y="655" width="32" height="20"/>
+  <rect class="furn" x="430" y="580" width="32" height="50"/>
+  <!-- door FROM bedroom 1 (west wall of toilet) -->
+  <path class="door" d="M386 620 A40 40 0 0 0 386 660"/>
+  <text class="lbl-sm" x="360" y="648">FROM BR</text>
+
+  <!-- passage from living to bedroom doors (no toilet) -->
+  <text class="lbl-sm" x="458" y="540">PASSAGE</text>
+  <text class="lbl-sm" x="458" y="554">NO HALL TOILET</text>
+  <!-- bedroom 1 entry from north -->
+  <path class="door" d="M250 559 A45 45 0 0 1 295 559"/>
+  <!-- bedroom 2 entry from north -->
+  <path class="door" d="M545 559 A40 40 0 0 1 585 559"/>
+
+  <!-- MASTER BEDROOM -->
+  <rect class="wall-in" x="476" y="559" width="252" height="216"/>
+  <text class="lbl" x="620" y="720">BEDROOM 2 / MASTER</text>
+  <text class="lbl-sm" x="620" y="736">11'-0" × 12'-0"</text>
+  <rect class="furn" x="560" y="600" width="110" height="70"/>
+  <rect class="furn" x="500" y="590" width="24" height="110"/>
+
+  <!-- south balconies -->
+  <rect class="hatch" x="188" y="775" width="198" height="45"/>
+  <text class="lbl-sm" x="287" y="802">BAL 11'-0" × 2'-6"</text>
+  <rect class="hatch" x="476" y="775" width="252" height="45"/>
+  <text class="lbl-sm" x="602" y="802">BAL 14'-0" × 2'-6"</text>
+  <!-- opening bedroom to south balcony -->
+  <line class="thin" x1="230" y1="775" x2="330" y2="775" stroke="#fff" stroke-width="6"/>
+  <line class="thin" x1="540" y1="775" x2="660" y2="775" stroke="#fff" stroke-width="6"/>
+
+  <!-- south setback / road -->
+  <text class="lbl" x="458" y="848">1'-0"  ·  ROAD</text>
+
+  <text class="note" x="80" y="900">What changed vs original</text>
+  <text class="note" x="80" y="922">" Original: two toilets stacked in the centre, both opening to the passage (common baths).</text>
+  <text class="note" x="80" y="942">" Bedroom 1: toilet sits on the east side of the room. Door opens from inside Bedroom 1. Keeps west balcony + south balcony.</text>
+  <text class="note" x="80" y="962">" Bedroom 2: the second toilet is moved north (old dining strip), aligned under the kitchen. Door opens from inside the master.</text>
+  <text class="note" x="80" y="982">" Dining is a table in the living. Passage in the middle has no toilet.</text>
+  <text class="note" x="80" y="1010">Plumbing: both attached toilets still share a wet wall near the old stack, so drainage can stay on the same shaft.</text>
+  <text class="note" x="80" y="1040">This is a concept layout for discussion, not a construction drawing.</text>
+</svg>
