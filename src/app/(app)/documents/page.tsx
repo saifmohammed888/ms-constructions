@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Trash2, Upload } from "lucide-react";
+import { FileUp, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +40,10 @@ export default function DocumentsPage() {
   const [preview, setPreview] = useState<Doc | null>(null);
   const [editing, setEditing] = useState<Doc | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Doc | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<DocCategory>((category as DocCategory) || "misc");
+  const [dragging, setDragging] = useState(false);
+  const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const settings = useQuery({
     queryKey: ["settings"],
@@ -56,22 +60,34 @@ export default function DocumentsPage() {
     },
   });
 
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
+  const uploadOne = async (file: File, selectedCategory: DocCategory) => {
       const fd = new FormData();
       fd.set("file", file);
-      fd.set("category", category || "misc");
+      fd.set("category", selectedCategory);
       const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
       return data as Doc;
-    },
-    onSuccess: () => {
-      toast.success("Uploaded");
-      qc.invalidateQueries({ queryKey: ["documents"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  };
+
+  const uploadFiles = async (files: File[]) => {
+    if (!files.length) return;
+    const selectedCategory = uploadCategory || "misc";
+    setUploadState({ done: 0, total: files.length, failed: 0 });
+    let failed = 0;
+    for (const file of files) {
+      try {
+        await uploadOne(file, selectedCategory);
+      } catch (error) {
+        failed += 1;
+        toast.error(`${file.name}: ${error instanceof Error ? error.message : "Upload failed"}`);
+      }
+      setUploadState((state) => ({ ...state, done: state.done + 1, failed }));
+    }
+    await qc.invalidateQueries({ queryKey: ["documents"] });
+    toast.success(`${files.length - failed} file${files.length - failed === 1 ? "" : "s"} uploaded to ${DOC_CATEGORY_LABELS[selectedCategory]}`);
+    setTimeout(() => setUploadState({ done: 0, total: 0, failed: 0 }), 800);
+  };
 
   const del = useMutation({
     mutationFn: async (doc: Doc) => {
@@ -108,22 +124,24 @@ export default function DocumentsPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <UploadOverlay show={upload.isPending} />
+      <UploadOverlay show={uploadState.total > 0 && uploadState.done < uploadState.total} />
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Documents</h1>
           <p className="text-sm text-muted-foreground">Drawings, receipts, and approvals. Tap a file to preview. Delete from the card or viewer.</p>
         </div>
         <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">
-          {upload.isPending ? <Spinner /> : <Upload className="size-4" />}
+          {uploadState.total > 0 && uploadState.done < uploadState.total ? <Spinner /> : <Upload className="size-4" />}
           Upload
           <input
+            ref={inputRef}
             type="file"
             className="hidden"
+            multiple
             accept="image/*,.pdf,.dwg,.docx,.xlsx,.doc,.xls,application/pdf"
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) upload.mutate(f);
+              const files = Array.from(e.target.files ?? []);
+              if (files.length) void uploadFiles(files);
               e.target.value = "";
             }}
           />
@@ -139,6 +157,31 @@ export default function DocumentsPage() {
           to upload files to Drive.
         </p>
       )}
+
+      <section
+        className={`rounded-2xl border-2 border-dashed p-5 text-center transition-colors ${dragging ? "border-primary bg-primary/5" : "border-black/10 bg-white"}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void uploadFiles(Array.from(e.dataTransfer.files));
+        }}
+      >
+        <FileUp className="mx-auto size-7 text-muted-foreground" />
+        <p className="mt-2 font-medium">Drop multiple files here</p>
+        <p className="mt-1 text-sm text-muted-foreground">Choose a category once, then upload drawings, photos, or documents together.</p>
+        <div className="mx-auto mt-3 flex max-w-sm items-center gap-2">
+          <Select value={uploadCategory} onValueChange={(v) => v && setUploadCategory(v as DocCategory)}>
+            <SelectTrigger className="min-h-11 flex-1"><SelectValue /></SelectTrigger>
+            <SelectContent>{DOC_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{DOC_CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => inputRef.current?.click()}>Choose files</Button>
+        </div>
+        {uploadState.total > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">Uploaded {uploadState.done} of {uploadState.total}{uploadState.failed ? ` · ${uploadState.failed} failed` : ""}</p>
+        )}
+      </section>
 
       <Input className="min-h-11" placeholder="Search name or tag" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="flex gap-2 overflow-x-auto pb-1">
