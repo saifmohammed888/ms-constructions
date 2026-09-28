@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, ImageIcon } from "lucide-react";
+import { FileSpreadsheet, FileText, FileType2 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useState } from "react";
 
@@ -62,16 +62,31 @@ export function FileThumb({
   doc: { id: string; name: string; thumbnailUrl: string | null; mimeType: string | null };
 }) {
   const t = kind(doc.mimeType, doc.name);
-  if (doc.thumbnailUrl) {
+  const ext = doc.name.includes(".") ? doc.name.split(".").pop()!.toUpperCase() : "FILE";
+  if (t === "image") {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={doc.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-stone-950">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/documents/${doc.id}/file`} alt={doc.name} className="h-full w-full object-contain" />
+        <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-2 py-1 text-[10px] font-semibold text-white">PHOTO</span>
+      </div>
     );
   }
+  if (t === "pdf" && doc.thumbnailUrl) {
+    return (
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-stone-100 p-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={doc.thumbnailUrl} alt={doc.name} className="max-h-full max-w-full object-contain shadow-sm" />
+        <span className="absolute bottom-2 left-2 rounded-md bg-red-600 px-2 py-1 text-[10px] font-semibold text-white">PDF</span>
+      </div>
+    );
+  }
+  const Icon = t === "pdf" ? FileText : /xls|xlsx|csv/.test(ext.toLowerCase()) ? FileSpreadsheet : /doc|docx/.test(ext.toLowerCase()) ? FileType2 : FileText;
+  const label = t === "pdf" ? "PDF document" : `${ext} document`;
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-stone-100 text-muted-foreground">
-      {t === "image" ? <ImageIcon className="size-8" /> : <FileText className="size-8" />}
-      <span className="px-2 text-center text-[11px]">{t === "pdf" ? "PDF" : doc.mimeType || "File"}</span>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-stone-50 to-stone-200 p-4 text-center text-muted-foreground">
+      <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-zinc-800 shadow-sm"><Icon className="size-7" /></span>
+      <div><p className="text-xs font-semibold text-zinc-800">{label}</p><p className="mt-1 line-clamp-2 text-[11px]">{doc.name}</p></div>
     </div>
   );
 }
