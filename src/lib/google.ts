@@ -130,6 +130,8 @@ function labelFolder(cat: DocCategory) {
     receipts: "Receipts",
     photos: "Photos",
     contracts: "Contracts",
+    bank: "Bank",
+    identity: "Identity",
     misc: "Misc",
   };
   return map[cat];

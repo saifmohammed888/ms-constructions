@@ -28,6 +28,8 @@ export const DOC_CATEGORIES = [
   "receipts",
   "photos",
   "contracts",
+  "bank",
+  "identity",
   "misc",
 ] as const;
 
@@ -76,6 +78,8 @@ export const DOC_CATEGORY_LABELS: Record<DocCategory, string> = {
   receipts: "Receipts",
   photos: "Photos",
   contracts: "Contracts",
+  bank: "Bank",
+  identity: "Identity",
   misc: "Misc",
 };
 
