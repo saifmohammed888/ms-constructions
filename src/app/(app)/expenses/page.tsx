@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ExpenseForm } from "@/components/expense-form";
@@ -42,6 +42,7 @@ function ExpensesInner() {
   const [contactId, setContactId] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [sort, setSort] = useState<{ key: "date" | "amount" | "category"; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
 
   const settings = useQuery({
     queryKey: ["settings"],
@@ -84,6 +85,12 @@ function ExpensesInner() {
     acc[e.category] = (acc[e.category] ?? 0) + Number(e.amount);
     return acc;
   }, {});
+  const items = useMemo(() => [...(list.data?.items ?? [])].sort((a, b) => {
+    const av = sort.key === "amount" ? Number(a.amount) : sort.key === "category" ? a.category : a.date;
+    const bv = sort.key === "amount" ? Number(b.amount) : sort.key === "category" ? b.category : b.date;
+    return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.direction === "asc" ? 1 : -1);
+  }), [list.data?.items, sort]);
+  const toggleSort = (key: "date" | "amount" | "category") => setSort((s) => ({ key, direction: s.key === key && s.direction === "asc" ? "desc" : "asc" }));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -163,26 +170,7 @@ function ExpensesInner() {
           </Button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {list.data!.items.map((e) => (
-            <li key={e.id} className="flex items-center gap-3 rounded-xl border p-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{formatInr(e.amount)}</p>
-                <p className="text-sm text-muted-foreground">
-                  {EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory]} · {formatDate(e.date)}
-                  {e.paymentMode ? ` · ${PAYMENT_MODE_LABELS[e.paymentMode as keyof typeof PAYMENT_MODE_LABELS]}` : ""}
-                </p>
-                {e.notes && <p className="truncate text-sm">{e.notes}</p>}
-              </div>
-              <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => { setEditing(e); setOpen(true); }}>
-                <Pencil className="size-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => del.mutate(e.id)}>
-                <Trash2 className="size-4" />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[720px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Date" onClick={() => toggleSort("date")} /></th><th className="px-4 py-3"><SortButton label="Category" onClick={() => toggleSort("category")} /></th><th className="px-4 py-3">Payment</th><th className="px-4 py-3 text-right"><SortButton label="Amount" onClick={() => toggleSort("amount")} /></th><th className="w-24 px-4 py-3" /></tr></thead><tbody>{items.map((e) => <tr key={e.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3">{formatDate(e.date)}</td><td className="px-4 py-3 font-medium">{EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category}</td><td className="px-4 py-3 text-muted-foreground">{e.paymentMode ? PAYMENT_MODE_LABELS[e.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "—"}{e.notes && <span className="ml-2">· {e.notes}</span>}</td><td className="px-4 py-3 text-right font-semibold">{formatInr(e.amount)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => del.mutate(e.id)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <ExpenseForm
@@ -198,6 +186,8 @@ function ExpensesInner() {
     </div>
   );
 }
+
+function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }
 
 export default function ExpensesPage() {
   return (

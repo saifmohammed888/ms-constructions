@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Phone, Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Phone, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ export default function ContactsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: "name" | "role"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
 
   const list = useQuery({
     queryKey: ["contacts", role, q],
@@ -50,6 +51,8 @@ export default function ContactsPage() {
       qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
+  const items = useMemo(() => [...(list.data ?? [])].sort((a, b) => { const av = a[sort.key].toLowerCase(); const bv = b[sort.key].toLowerCase(); return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.direction === "asc" ? 1 : -1); }), [list.data, sort]);
+  const toggleSort = (key: "name" | "role") => setSort((s) => ({ key, direction: s.key === key && s.direction === "asc" ? "desc" : "asc" }));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -85,34 +88,7 @@ export default function ContactsPage() {
           </Button>
         </div>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {list.data!.map((c) => (
-            <li key={c.id} className="rounded-xl border p-4">
-              <div className="flex items-start justify-between gap-2">
-                <button className="text-left" onClick={() => setDetail(c.id)}>
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-sm text-muted-foreground">{CONTACT_ROLE_LABELS[c.role as ContactRole]}</p>
-                </button>
-                {c.phone && (
-                  <a
-                    href={`tel:${c.phone}`}
-                    className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
-                  >
-                    <Phone className="size-4" /> Call
-                  </a>
-                )}
-              </div>
-              <div className="mt-3 flex gap-1">
-                <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => { setEditing(c); setOpen(true); }}>
-                  <Pencil className="size-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => del.mutate(c.id)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[680px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Name" onClick={() => toggleSort("name")} /></th><th className="px-4 py-3"><SortButton label="Role" onClick={() => toggleSort("role")} /></th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Email</th><th className="w-32 px-4 py-3" /></tr></thead><tbody>{items.map((c) => <tr key={c.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3"><button className="font-medium hover:underline" onClick={() => setDetail(c.id)}>{c.name}</button></td><td className="px-4 py-3 text-muted-foreground">{CONTACT_ROLE_LABELS[c.role as ContactRole] ?? c.role}</td><td className="px-4 py-3">{c.phone ? <a className="inline-flex items-center gap-1 text-sm underline" href={`tel:${c.phone}`}><Phone className="size-3.5" />{c.phone}</a> : "—"}</td><td className="px-4 py-3 text-muted-foreground">{c.email || "—"}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => { setEditing(c); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => del.mutate(c.id)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <ContactForm key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} initial={editing ?? undefined} />
@@ -120,6 +96,8 @@ export default function ContactsPage() {
     </div>
   );
 }
+
+function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }
 
 function ContactDetail({ id, onClose }: { id: string | null; onClose: () => void }) {
   const q = useQuery({
