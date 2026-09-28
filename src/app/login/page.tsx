@@ -32,7 +32,9 @@ function LoginInner() {
         setError(data.error || "Login failed. Check Vercel env vars.");
         return;
       }
-      router.push(params.get("next") || "/");
+      // Replace the login history entry so mobile browser Back never returns
+      // to the login screen after a successful session is established.
+      router.replace(params.get("next") || "/");
       router.refresh();
     } catch {
       setError("Network error. Try again.");
