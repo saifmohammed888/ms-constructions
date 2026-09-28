@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { desc, eq, gte, sql } from "drizzle-orm";
 import { getDb, getSettingsRow } from "@/lib/db";
-import { expenses, tasks } from "@/lib/schema";
+import { documents, expenses, tasks } from "@/lib/schema";
 import { lastNMonths, todayIso } from "@/lib/format";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 
@@ -31,6 +31,8 @@ export async function GET() {
   const thisWeek = [...overdue, ...upcoming].slice(0, 5);
   const recent = [...all].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 3);
   const duePayments = all.filter((e) => e.paymentStatus === "due").sort((a, b) => (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1).slice(0, 5);
+  const photoRows = await db.select({ id: documents.id, name: documents.name, mimeType: documents.mimeType, uploadedAt: documents.uploadedAt }).from(documents).where(eq(documents.category, "photos")).orderBy(desc(documents.uploadedAt)).limit(12);
+  const recentPhotos = photoRows.filter((photo) => photo.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(photo.name)).slice(0, 5);
 
   return NextResponse.json({
     projectName: row?.projectName ?? "My Construction",
@@ -43,6 +45,7 @@ export async function GET() {
     overdueCount: overdue.length,
     recent,
     duePayments,
+    recentPhotos,
     setupComplete: row?.setupComplete ?? false,
     gcalConnected: row?.gcalConnected ?? false,
   });

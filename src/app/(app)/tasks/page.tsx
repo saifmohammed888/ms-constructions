@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Plus, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { CheckCircle2, Eye, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,14 +107,6 @@ export default function TasksPage() {
     return key;
   }
 
-  function move(listInGroup: Task[], index: number, dir: -1 | 1) {
-    const next = index + dir;
-    if (next < 0 || next >= listInGroup.length) return;
-    const a = listInGroup[index];
-    const b = listInGroup[next];
-    patch.mutate({ id: a.id, body: { sortOrder: b.sortOrder } });
-    patch.mutate({ id: b.id, body: { sortOrder: a.sortOrder } });
-  }
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -168,7 +160,7 @@ export default function TasksPage() {
         groups.map(([key, items]) => (
           <section key={key} className="rounded-xl border p-3">
             <p className="mb-2 text-sm font-medium">{label(key)}</p>
-            <TaskTable items={items} onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={(t) => del.mutate(t.id)} onUp={(t) => move(items, items.indexOf(t), -1)} onDown={(t) => move(items, items.indexOf(t), 1)} />
+            <TaskTable items={items} onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={(t) => del.mutate(t.id)} />
           </section>
         ))
       )}
@@ -179,8 +171,8 @@ export default function TasksPage() {
   );
 }
 
-function TaskTable({ items, overdue, onToggle, onView, onEdit, onDelete, onUp, onDown }: { items: Task[]; overdue?: boolean; onToggle: (task: Task) => void; onView: (task: Task) => void; onEdit: (task: Task) => void; onDelete: (task: Task) => void; onUp?: (task: Task) => void; onDown?: (task: Task) => void }) {
+function TaskTable({ items, overdue, onToggle, onView, onEdit, onDelete }: { items: Task[]; overdue?: boolean; onToggle: (task: Task) => void; onView: (task: Task) => void; onEdit: (task: Task) => void; onDelete: (task: Task) => void }) {
   return (
-    <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="w-12 px-2 py-2">Done</th><th className="px-2 py-2">Task</th><th className="px-2 py-2">Goal / phase</th><th className="px-2 py-2">Due / completed</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Notes</th><th className="w-48 px-2 py-2 text-right">Actions</th></tr></thead><tbody>{items.map((task) => <tr key={task.id} className={`border-b last:border-0 ${task.status === "done" ? "bg-emerald-50/80 text-emerald-950" : "hover:bg-zinc-50"}`}><td className="px-2 py-2"><Checkbox checked={task.status === "done"} onCheckedChange={() => onToggle(task)} /></td><td className={`px-2 py-2 font-medium ${task.status === "done" ? "line-through decoration-emerald-600/60" : overdue ? "text-destructive" : ""}`}>{task.status === "done" && <CheckCircle2 className="mr-1 inline size-4 text-emerald-600" />}{task.title}</td><td className="px-2 py-2 text-muted-foreground">{task.goalLabel || "—"}</td><td className="px-2 py-2 text-muted-foreground">{task.status === "done" ? `Completed ${formatDate(task.completedAt || task.dueDate)}` : formatDate(task.dueDate)}</td><td className="px-2 py-2"><span className={`rounded-full px-2 py-1 text-xs ${task.status === "done" ? "bg-emerald-100 text-emerald-700" : overdue ? "bg-red-100 text-red-700" : "bg-zinc-100 text-zinc-700"}`}>{task.status === "done" ? "Completed" : overdue ? "Overdue" : "Pending"}</span></td><td className="max-w-[220px] px-2 py-2 text-muted-foreground"><span className="line-clamp-1" title={task.notes || undefined}>{task.notes || "—"}</span></td><td className="px-2 py-1"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View task" onClick={() => onView(task)}><Eye className="size-4" /></Button>{onUp && <Button variant="ghost" size="icon" title="Move up" onClick={() => onUp(task)}><ArrowUp className="size-4" /></Button>}{onDown && <Button variant="ghost" size="icon" title="Move down" onClick={() => onDown(task)}><ArrowDown className="size-4" /></Button>}<Button variant="ghost" size="icon" title="Edit task" onClick={() => onEdit(task)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete task" onClick={() => onDelete(task)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="w-12 px-2 py-2">Done</th><th className="px-2 py-2">Task</th><th className="px-2 py-2">Goal / phase</th><th className="px-2 py-2">Due / completed</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Notes</th><th className="w-32 px-2 py-2 text-right">Actions</th></tr></thead><tbody>{items.map((task) => <tr key={task.id} className={`border-b last:border-0 ${task.status === "done" ? "bg-emerald-50/80 text-emerald-950" : "hover:bg-zinc-50"}`}><td className="px-2 py-2"><Checkbox checked={task.status === "done"} onCheckedChange={() => onToggle(task)} /></td><td className={`px-2 py-2 font-medium ${task.status === "done" ? "line-through decoration-emerald-600/60" : overdue ? "text-destructive" : ""}`}>{task.status === "done" && <CheckCircle2 className="mr-1 inline size-4 text-emerald-600" />}{task.title}</td><td className="px-2 py-2 text-muted-foreground">{task.goalLabel || "—"}</td><td className="px-2 py-2 text-muted-foreground">{task.status === "done" ? `Completed ${formatDate(task.completedAt || task.dueDate)}` : formatDate(task.dueDate)}</td><td className="px-2 py-2"><span className={`rounded-full px-2 py-1 text-xs ${task.status === "done" ? "bg-emerald-100 text-emerald-700" : overdue ? "bg-red-100 text-red-700" : "bg-zinc-100 text-zinc-700"}`}>{task.status === "done" ? "Completed" : overdue ? "Overdue" : "Pending"}</span></td><td className="max-w-[220px] px-2 py-2 text-muted-foreground"><span className="line-clamp-1" title={task.notes || undefined}>{task.notes || "—"}</span></td><td className="px-2 py-1"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View task" onClick={() => onView(task)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Edit task" onClick={() => onEdit(task)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete task" onClick={() => onDelete(task)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
   );
 }

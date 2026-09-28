@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Camera, ClipboardList as ClipboardIcon, FileUp, Plus, Receipt, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, FileUp, Plus, Receipt, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,7 @@ type Dash = {
   overdueCount: number;
   recent: { id: string; amount: string; category: string; date: string }[];
   duePayments: { id: string; amount: string; category: string; dueDate: string | null; notes: string | null }[];
+  recentPhotos: { id: string; name: string; mimeType: string | null; uploadedAt: string }[];
   setupComplete: boolean;
 };
 
@@ -187,10 +188,19 @@ export default function DashboardPage() {
 
       <AskProject />
 
+      <SitePhotoCarousel photos={d.recentPhotos} />
+
       <ExpenseForm open={expenseOpen} onOpenChange={setExpenseOpen} />
       <TaskForm open={taskOpen} onOpenChange={setTaskOpen} />
     </div>
   );
+}
+
+function SitePhotoCarousel({ photos }: { photos: Dash["recentPhotos"] }) {
+  const [index, setIndex] = useState(0);
+  if (!photos.length) return null;
+  const photo = photos[index];
+  return <Card className="overflow-hidden rounded-2xl border-black/5 shadow-sm"><CardHeader className="flex-row items-center justify-between"><div><CardTitle className="text-base">Latest site photos</CardTitle><p className="text-xs text-muted-foreground">{index + 1} of {photos.length}</p></div><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Previous photo" onClick={() => setIndex((index - 1 + photos.length) % photos.length)}><ArrowLeft className="size-4" /></Button><Button variant="outline" size="icon" aria-label="Next photo" onClick={() => setIndex((index + 1) % photos.length)}><ArrowRight className="size-4" /></Button></div></CardHeader><CardContent className="p-0"><div className="relative aspect-[16/9] overflow-hidden bg-zinc-950"><img src={`/api/documents/${photo.id}/file`} alt={photo.name} className="h-full w-full object-contain" /><div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 pt-12 text-sm text-white">{photo.name}</div></div></CardContent></Card>;
 }
 
 function QuickAction({
