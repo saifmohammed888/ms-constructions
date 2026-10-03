@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
       goalLabel: parsed.data.goalLabel || null,
       dueDate: parsed.data.dueDate || null,
       status: parsed.data.status ?? "todo",
+      priority: parsed.data.priority ?? "normal",
+      assigneeId: parsed.data.assigneeId || null,
       notes: parsed.data.notes || null,
       sortOrder: parsed.data.sortOrder ?? 0,
     })

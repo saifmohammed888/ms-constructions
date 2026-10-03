@@ -15,6 +15,7 @@ type Task = {
   dueDate?: string | null;
   goalLabel?: string | null;
   notes?: string | null;
+  priority?: string;
   gcalEventId?: string | null;
 };
 
@@ -32,6 +33,7 @@ export function TaskForm({
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [goalLabel, setGoalLabel] = useState(initial?.goalLabel ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [priority, setPriority] = useState(initial?.priority ?? "normal");
 
   const save = useMutation({
     mutationFn: async () => {
@@ -41,6 +43,7 @@ export function TaskForm({
         goalLabel: goalLabel || null,
         groupType: goalLabel ? "goal" : "week",
         notes: notes || null,
+        priority,
       };
       const url = initial?.id ? `/api/tasks/${initial.id}` : "/api/tasks";
       const res = await fetch(url, {
@@ -73,6 +76,10 @@ export function TaskForm({
         <div>
           <Label htmlFor="title">Title</Label>
           <Input id="title" className="mt-1.5 min-h-11" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
+        </div>
+        <div>
+          <Label htmlFor="priority">Priority</Label>
+          <select id="priority" className="mt-1.5 min-h-11 w-full rounded-lg border bg-background px-3 text-sm" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>
         </div>
         <div>
           <Label htmlFor="due">Due date</Label>

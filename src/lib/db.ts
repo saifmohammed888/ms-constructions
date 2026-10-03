@@ -10,6 +10,14 @@ let ready = false;
 
 const DDL = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TABLE IF NOT EXISTS projects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  stage text NOT NULL DEFAULT 'Planning & coordination',
+  location text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO projects (name) SELECT 'My Construction' WHERE NOT EXISTS (SELECT 1 FROM projects);
 CREATE TABLE IF NOT EXISTS contacts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -22,6 +30,8 @@ CREATE TABLE IF NOT EXISTS contacts (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS project_id uuid;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company text;
 CREATE TABLE IF NOT EXISTS documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -34,6 +44,7 @@ CREATE TABLE IF NOT EXISTS documents (
   tags text[] NOT NULL DEFAULT '{}',
   uploaded_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS project_id uuid;
 CREATE TABLE IF NOT EXISTS expenses (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   amount numeric(12,2) NOT NULL,
@@ -47,6 +58,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   receipt_doc_id uuid REFERENCES documents(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS project_id uuid;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'paid';
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS due_date date;
 CREATE TABLE IF NOT EXISTS tasks (
@@ -63,6 +75,19 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id uuid;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority text NOT NULL DEFAULT 'normal';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assignee_id uuid;
+CREATE TABLE IF NOT EXISTS site_updates (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid NOT NULL, date date NOT NULL DEFAULT current_date, work_completed text NOT NULL, work_in_progress text, work_planned text, worker_count int, materials_received text, blockers text, floor_area text, status text NOT NULL DEFAULT 'normal', notes text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS materials (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid NOT NULL, material text NOT NULL, required_quantity numeric(12,2), received_quantity numeric(12,2), unit text, supplier_id uuid, rate numeric(12,2), total numeric(12,2), delivery_date date, storage_location text, floor_area text, notes text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS snags (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid NOT NULL, issue text NOT NULL, location text, responsible_id uuid, priority text NOT NULL DEFAULT 'normal', due_date date, status text NOT NULL DEFAULT 'open', resolution_notes text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS decisions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid NOT NULL, title text NOT NULL, description text, date date NOT NULL DEFAULT current_date, responsible_id uuid, status text NOT NULL DEFAULT 'open', cost_impact numeric(12,2), design_impact text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS approvals (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid NOT NULL, approval_type text NOT NULL, authority text, application_number text, submission_date date, approval_date date, expiry_date date, status text NOT NULL DEFAULT 'not_checked', required_documents text[] NOT NULL DEFAULT '{}', noc_status text, notes text);
+CREATE TABLE IF NOT EXISTS drawing_revisions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid NOT NULL, drawing_type text NOT NULL, floor_area text, revision_number text NOT NULL, revision_date date, prepared_by text, status text NOT NULL DEFAULT 'draft', document_id uuid, is_current boolean NOT NULL DEFAULT false);
+UPDATE contacts SET project_id = (SELECT id FROM projects LIMIT 1) WHERE project_id IS NULL;
+UPDATE documents SET project_id = (SELECT id FROM projects LIMIT 1) WHERE project_id IS NULL;
+UPDATE expenses SET project_id = (SELECT id FROM projects LIMIT 1) WHERE project_id IS NULL;
+UPDATE tasks SET project_id = (SELECT id FROM projects LIMIT 1) WHERE project_id IS NULL;
 CREATE TABLE IF NOT EXISTS settings (
   id int PRIMARY KEY DEFAULT 1,
   project_name text NOT NULL DEFAULT 'My Construction',

@@ -18,7 +18,9 @@ export const contacts = pgTable(
   "contacts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id"),
     name: text("name").notNull(),
+    company: text("company"),
     role: text("role").notNull(),
     phone: text("phone"),
     altPhone: text("alt_phone"),
@@ -35,6 +37,7 @@ export const documents = pgTable(
   "documents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id"),
     name: text("name").notNull(),
     driveFileId: text("drive_file_id").notNull(),
     thumbnailUrl: text("thumbnail_url"),
@@ -56,6 +59,7 @@ export const expenses = pgTable(
   "expenses",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id"),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     category: text("category").notNull(),
     date: date("date").notNull().default(sql`current_date`),
@@ -76,17 +80,115 @@ export const expenses = pgTable(
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id"),
   title: text("title").notNull(),
   groupType: text("group_type").notNull().default("week"),
   goalLabel: text("goal_label"),
   dueDate: date("due_date"),
   status: text("status").notNull().default("todo"),
+  priority: text("priority").notNull().default("normal"),
+  assigneeId: uuid("assignee_id"),
   gcalEventId: text("gcal_event_id"),
   notes: text("notes"),
   sortOrder: integer("sort_order").notNull().default(0),
   calendarSyncError: text("calendar_sync_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+export const projects = pgTable("projects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  stage: text("stage").notNull().default("Planning & coordination"),
+  location: text("location"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const siteUpdates = pgTable("site_updates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull(),
+  date: date("date").notNull().default(sql`current_date`),
+  workCompleted: text("work_completed").notNull(),
+  workInProgress: text("work_in_progress"),
+  workPlanned: text("work_planned"),
+  workerCount: integer("worker_count"),
+  materialsReceived: text("materials_received"),
+  blockers: text("blockers"),
+  floorArea: text("floor_area"),
+  status: text("status").notNull().default("normal"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const materials = pgTable("materials", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull(),
+  material: text("material").notNull(),
+  requiredQuantity: numeric("required_quantity", { precision: 12, scale: 2 }),
+  receivedQuantity: numeric("received_quantity", { precision: 12, scale: 2 }),
+  unit: text("unit"),
+  supplierId: uuid("supplier_id"),
+  rate: numeric("rate", { precision: 12, scale: 2 }),
+  total: numeric("total", { precision: 12, scale: 2 }),
+  deliveryDate: date("delivery_date"),
+  storageLocation: text("storage_location"),
+  floorArea: text("floor_area"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const snags = pgTable("snags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull(),
+  issue: text("issue").notNull(),
+  location: text("location"),
+  responsibleId: uuid("responsible_id"),
+  priority: text("priority").notNull().default("normal"),
+  dueDate: date("due_date"),
+  status: text("status").notNull().default("open"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const decisions = pgTable("decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  date: date("date").notNull().default(sql`current_date`),
+  responsibleId: uuid("responsible_id"),
+  status: text("status").notNull().default("open"),
+  costImpact: numeric("cost_impact", { precision: 12, scale: 2 }),
+  designImpact: text("design_impact"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const approvals = pgTable("approvals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull(),
+  approvalType: text("approval_type").notNull(),
+  authority: text("authority"),
+  applicationNumber: text("application_number"),
+  submissionDate: date("submission_date"),
+  approvalDate: date("approval_date"),
+  expiryDate: date("expiry_date"),
+  status: text("status").notNull().default("not_checked"),
+  requiredDocuments: text("required_documents").array().notNull().default(sql`'{}'`),
+  nocStatus: text("noc_status"),
+  notes: text("notes"),
+});
+
+export const drawingRevisions = pgTable("drawing_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").notNull(),
+  drawingType: text("drawing_type").notNull(),
+  floorArea: text("floor_area"),
+  revisionNumber: text("revision_number").notNull(),
+  revisionDate: date("revision_date"),
+  preparedBy: text("prepared_by"),
+  status: text("status").notNull().default("draft"),
+  documentId: uuid("document_id"),
+  isCurrent: boolean("is_current").notNull().default(false),
 });
 
 export const settings = pgTable("settings", {
@@ -109,10 +211,17 @@ export const loginAttempts = pgTable("login_attempts", {
 });
 
 export const schema = {
+  projects,
   contacts,
   documents,
   expenses,
   tasks,
   settings,
   loginAttempts,
+  siteUpdates,
+  materials,
+  snags,
+  decisions,
+  approvals,
+  drawingRevisions,
 };
