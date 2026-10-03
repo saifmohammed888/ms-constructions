@@ -46,6 +46,7 @@ export default function DocumentsPage() {
   const [pendingDelete, setPendingDelete] = useState<Doc | null>(null);
   const [uploadCategory, setUploadCategory] = useState<DocCategory>((category as DocCategory) || "misc");
   const [dragging, setDragging] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -163,22 +164,27 @@ export default function DocumentsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Documents</h1>
           <p className="text-sm text-muted-foreground">Drawings, receipts, and approvals. Tap a file to preview. Delete from the card or viewer.</p>
         </div>
-        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">
-          {uploadState.total > 0 && uploadState.done < uploadState.total ? <Spinner /> : <Upload className="size-4" />}
-          Upload
-          <input
-            ref={inputRef}
-            type="file"
-            className="hidden"
-            multiple
-            accept="image/*,.pdf,.dwg,.docx,.xlsx,.doc,.xls,application/pdf"
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              if (files.length) void uploadFiles(files);
-              e.target.value = "";
-            }}
-          />
-        </label>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => setBulkOpen((open) => !open)} aria-expanded={bulkOpen}>
+            {bulkOpen ? "Hide bulk upload" : "Bulk upload"}
+          </Button>
+          <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">
+            {uploadState.total > 0 && uploadState.done < uploadState.total ? <Spinner /> : <Upload className="size-4" />}
+            Upload
+            <input
+              ref={inputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept="image/*,.pdf,.dwg,.docx,.xlsx,.doc,.xls,application/pdf"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) void uploadFiles(files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       {!settings.data?.driveConnected && (
@@ -191,7 +197,7 @@ export default function DocumentsPage() {
         </p>
       )}
 
-      <section
+      {bulkOpen && <section
         className={`rounded-2xl border-2 border-dashed p-5 text-center transition-colors ${dragging ? "border-primary bg-primary/5" : "border-black/10 bg-white"}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -214,7 +220,7 @@ export default function DocumentsPage() {
         {uploadState.total > 0 && (
           <p className="mt-3 text-xs text-muted-foreground">Uploaded {uploadState.done} of {uploadState.total}{uploadState.failed ? ` · ${uploadState.failed} failed` : ""}</p>
         )}
-      </section>
+      </section>}
 
       <Input className="min-h-11" placeholder="Search name or tag" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="flex gap-2 overflow-x-auto pb-1">
