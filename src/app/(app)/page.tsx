@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, Copy, FileUp, Plus, Receipt, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, Copy, Download, FileUp, Plus, Receipt, Sparkles, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,6 +102,7 @@ export default function DashboardPage() {
           <Button variant="outline" className="min-h-11 rounded-xl" onClick={copyProjectData} disabled={exporting}>
             <Copy className="size-4" /> {exporting ? "Copying…" : "Copy data"}
           </Button>
+          <a href="/api/export/excel" className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-medium"><Download className="size-4" /> Excel</a>
           <Button className="min-h-11 rounded-xl" onClick={() => setExpenseOpen(true)}>
             <Plus className="size-4" /> Expense
           </Button>
