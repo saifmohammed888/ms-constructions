@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest) {
   const db = await getDb();
   const projectId = req.nextUrl.searchParams.get("projectId");
   const selected = table(parsed.data) as any;
-  const rows = await (db as any).select().from(selected).where(projectId ? eq(selected.projectId, projectId) : undefined).orderBy(desc(selected.createdAt)) as unknown[];
+  const sortColumn = parsed.data === "drawing-revisions" ? selected.revisionDate : selected.createdAt;
+  const rows = await (db as any).select().from(selected).where(projectId ? eq(selected.projectId, projectId) : undefined).orderBy(desc(sortColumn)) as unknown[];
   return NextResponse.json(rows);
 }
 
