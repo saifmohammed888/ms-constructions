@@ -15,6 +15,7 @@ export const loginSchema = z.object({
 
 export const contactSchema = z.object({
   name: z.string().min(1).max(120),
+  company: z.string().max(120).optional().nullable(),
   role: z.enum(CONTACT_ROLES),
   phone: z.string().max(30).optional().nullable(),
   altPhone: z.string().max(30).optional().nullable(),
@@ -45,6 +46,8 @@ export const taskSchema = z.object({
     .optional()
     .nullable(),
   status: z.enum(TASK_STATUSES).optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  assigneeId: z.string().uuid().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   sortOrder: z.number().int().optional(),
   syncCalendar: z.boolean().optional(),

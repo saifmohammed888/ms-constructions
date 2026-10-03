@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     .insert(contacts)
     .values({
       name: parsed.data.name,
+      company: parsed.data.company || null,
       role: parsed.data.role,
       phone: parsed.data.phone || null,
       altPhone: parsed.data.altPhone || null,
