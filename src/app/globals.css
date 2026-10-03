@@ -156,16 +156,12 @@
 @media (max-width: 767px) {
   html, body { overflow-x: hidden; }
   button, a, input, select, textarea { touch-action: manipulation; }
-  .overflow-x-auto:has(table), section:has(> div > table) { overflow: visible; border: 0; background: transparent; box-shadow: none; }
-  .overflow-x-auto:has(table) table, .overflow-x-auto:has(table) tbody, section:has(> div > table) table, section:has(> div > table) tbody { display: block; min-width: 0 !important; width: 100%; }
-  .overflow-x-auto:has(table) thead, section:has(> div > table) thead { display: none; }
-  .overflow-x-auto:has(table) tr, section:has(> div > table) tr { display: grid; grid-template-columns: 1fr auto; gap: .45rem .75rem; margin-bottom: .65rem; padding: .9rem; border: 1px solid rgb(0 0 0 / .07); border-radius: 1rem; background: white; box-shadow: 0 2px 8px rgb(0 0 0 / .035); }
-  .overflow-x-auto:has(table) td, section:has(> div > table) td { display: block; min-width: 0; padding: 0 !important; border: 0 !important; }
-  .overflow-x-auto:has(table) td:first-child, section:has(> div > table) td:first-child { grid-column: 1; }
-  .overflow-x-auto:has(table) td:last-child, section:has(> div > table) td:last-child { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
-  .overflow-x-auto:has(table) td:not(:first-child):not(:last-child), section:has(> div > table) td:not(:first-child):not(:last-child) { grid-column: 1 / -1; }
-  .overflow-x-auto:has(table) td:nth-child(2), section:has(> div > table) td:nth-child(2) { font-weight: 600; }
-  .overflow-x-auto:has(table) td:nth-child(n+3):not(:last-child), section:has(> div > table) td:nth-child(n+3):not(:last-child) { color: var(--muted-foreground); font-size: .8rem; }
+  .table-shell, .overflow-x-auto:has(table), section:has(> div > table) { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+  .table-shell table, .overflow-x-auto:has(table) table, section:has(> div > table) table { min-width: 680px !important; width: max-content; }
+  .table-shell th, .overflow-x-auto:has(table) th, section:has(> div > table) th { height: 2.75rem; padding: .65rem .75rem; white-space: nowrap; }
+  .table-shell td, .overflow-x-auto:has(table) td, section:has(> div > table) td { height: 3.5rem; padding: .65rem .75rem; white-space: nowrap; vertical-align: middle; }
+  .table-shell td:first-child, .overflow-x-auto:has(table) td:first-child, section:has(> div > table) td:first-child { white-space: normal; }
+  .table-shell th:last-child, .table-shell td:last-child, .overflow-x-auto:has(table) th:last-child, .overflow-x-auto:has(table) td:last-child, section:has(> div > table) th:last-child, section:has(> div > table) td:last-child { position: sticky; right: 0; background: white; box-shadow: -6px 0 10px rgb(0 0 0 / .04); }
 }
 
 @media (prefers-reduced-motion: reduce) {
