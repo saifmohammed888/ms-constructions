@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, FileUp, Pencil, Trash2, Upload } from "lucide-react";
+import { Eye, FileUp, Image as ImageIcon, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -123,10 +123,10 @@ export default function DocumentsPage() {
     },
   });
 
-  const items = [...(list.data ?? [])].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
   const allDocuments = list.data ?? [];
   const isImage = (doc: Doc) => doc.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(doc.name);
   const imageDocuments = allDocuments.filter(isImage);
+  const items = [...allDocuments].filter((doc) => !isImage(doc)).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
   const otherDocuments = allDocuments.length - imageDocuments.length;
   const photoBytes = imageDocuments.reduce((sum, doc) => sum + (doc.sizeBytes ?? 0), 0);
   const documentBytes = allDocuments.filter((doc) => !isImage(doc)).reduce((sum, doc) => sum + (doc.sizeBytes ?? 0), 0);
@@ -215,6 +215,8 @@ export default function DocumentsPage() {
         <LibraryStat label="Documents" value={`${otherDocuments}`} detail={`${formatBytes(documentBytes)} · PDFs and other files`} />
       </section>
 
+      {!list.isLoading && imageDocuments.length > 0 && <ImageTable items={imageDocuments} onView={setPreview} />}
+
       {list.isLoading ? (
         <CardSkeleton rows={6} />
       ) : (list.data?.length ?? 0) === 0 ? (
@@ -275,6 +277,10 @@ export default function DocumentsPage() {
       />
     </div>
   );
+}
+
+function ImageTable({ items, onView }: { items: Doc[]; onView: (doc: Doc) => void }) {
+  return <section className="table-shell" aria-label="Images"><div className="flex items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">Images</h2><span className="text-xs text-muted-foreground">{items.length} files · select a row to view</span></div><table className="w-full text-sm"><thead><tr><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td className="max-w-[24rem] truncate font-medium">{doc.name}</td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button></td></tr>)}</tbody></table></section>;
 }
 
 function formatBytes(bytes: number) {

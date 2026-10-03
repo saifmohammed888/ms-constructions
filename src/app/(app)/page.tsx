@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Camera, ClipboardList as ClipboardIcon, Copy, Download, FileUp, Plus, Receipt, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowRight, ClipboardList as ClipboardIcon, Copy, Download, Plus, Sparkles, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BudgetBar, CategoryDonut, MonthlyBurn } from "@/components/charts/charts";
-import { ExpenseForm } from "@/components/expense-form";
 import { TaskForm } from "@/components/task-form";
 import { formatDate, formatInr } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/constants";
@@ -35,7 +34,6 @@ type Dash = {
 export default function DashboardPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const [expenseOpen, setExpenseOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const dash = useQuery({
@@ -103,9 +101,6 @@ export default function DashboardPage() {
             <Copy className="size-4" /> {exporting ? "Copying…" : "Copy data"}
           </Button>
           <a href="/api/export/excel" className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-medium"><Download className="size-4" /> Excel</a>
-          <Button className="min-h-11 rounded-xl" onClick={() => setExpenseOpen(true)}>
-            <Plus className="size-4" /> Expense
-          </Button>
           <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => setTaskOpen(true)}>
             <Plus className="size-4" /> Task
           </Button>
@@ -116,10 +111,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <QuickAction icon={Receipt} label="Expense" onClick={() => setExpenseOpen(true)} />
-        <QuickAction icon={FileUp} label="Upload" href="/documents" />
         <QuickAction icon={ClipboardIcon} label="Task" onClick={() => setTaskOpen(true)} />
-        <QuickAction icon={Camera} label="Site update" href="/documents" />
       </div>
 
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Project attention summary">
@@ -194,9 +186,9 @@ export default function DashboardPage() {
           {d.recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No expenses yet.{" "}
-              <button className="underline" onClick={() => setExpenseOpen(true)}>
+              <Link className="underline" href="/expenses">
                 Add your first expense
-              </button>
+              </Link>
             </p>
           ) : (
             d.recent.map((e) => (
@@ -217,37 +209,14 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-black/5 shadow-sm">
-        <CardHeader><CardTitle className="text-base">Project insights</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3">
-          <Insight label="Due payments" value={formatInr(d.duePayments.reduce((sum, payment) => sum + Number(payment.amount), 0))} tone={d.duePayments.length ? "amber" : "green"} detail={d.duePayments.length ? `${d.duePayments.length} payment${d.duePayments.length === 1 ? "" : "s"} to plan for` : "Nothing pending"} />
-          <Insight label="Upcoming work" value={`${d.thisWeek.filter((task) => task.status !== "done").length}`} tone={d.thisWeek.some((task) => task.status !== "done") ? "blue" : "green"} detail="Open tasks this week" />
-          <Insight label="Project activity" value={`${d.recent.length}`} tone="neutral" detail="Recent expense records" />
-        </CardContent>
-      </Card>
-
-      <ExpenseForm open={expenseOpen} onOpenChange={setExpenseOpen} />
       <TaskForm open={taskOpen} onOpenChange={setTaskOpen} />
-      <SitePhotoCarousel photos={d.recentPhotos} />
     </div>
   );
-}
-
-function Insight({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "amber" | "green" | "blue" | "neutral" }) {
-  const styles = { amber: "bg-amber-50 text-amber-900", green: "bg-emerald-50 text-emerald-900", blue: "bg-blue-50 text-blue-900", neutral: "bg-zinc-50 text-zinc-900" };
-  return <div className={`rounded-xl p-4 ${styles[tone]}`}><p className="text-xs font-medium uppercase tracking-wide opacity-70">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p><p className="mt-1 text-xs opacity-70">{detail}</p></div>;
 }
 
 function AttentionCard({ href, title, value, detail, tone }: { href: string; title: string; value: string; detail: string; tone: "red" | "amber" | "blue" | "green" }) {
   const styles = { red: "border-red-200 bg-red-50 text-red-950", amber: "border-amber-200 bg-amber-50 text-amber-950", blue: "border-blue-200 bg-blue-50 text-blue-950", green: "border-emerald-200 bg-emerald-50 text-emerald-950" };
   return <Link href={href} className={`rounded-2xl border p-4 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${styles[tone]}`}><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium uppercase tracking-wide opacity-70">{title}</p>{tone === "red" && <TriangleAlert className="size-4" aria-hidden="true" />}</div><p className="mt-2 text-xl font-semibold">{value}</p><p className="mt-1 text-xs opacity-70">{detail}</p></Link>;
-}
-
-function SitePhotoCarousel({ photos }: { photos: Dash["recentPhotos"] }) {
-  const [index, setIndex] = useState(0);
-  if (!photos.length) return null;
-  const photo = photos[index];
-  return <Card className="overflow-hidden rounded-2xl border-black/5 shadow-sm"><CardHeader className="flex-row items-center justify-between"><div><CardTitle className="text-base">Latest site photos</CardTitle><p className="text-xs text-muted-foreground">{index + 1} of {photos.length}</p></div><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Previous photo" onClick={() => setIndex((index - 1 + photos.length) % photos.length)}><ArrowLeft className="size-4" /></Button><Button variant="outline" size="icon" aria-label="Next photo" onClick={() => setIndex((index + 1) % photos.length)}><ArrowRight className="size-4" /></Button></div></CardHeader><CardContent className="p-0"><div className="relative aspect-[16/9] overflow-hidden bg-zinc-950"><img src={`/api/documents/${photo.id}/file`} alt={photo.name} className="h-full w-full object-contain" /><div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 pt-12 text-sm text-white">{photo.name}</div></div></CardContent></Card>;
 }
 
 function QuickAction({
@@ -256,7 +225,7 @@ function QuickAction({
   onClick,
   href,
 }: {
-  icon: typeof Receipt;
+  icon: typeof ClipboardIcon;
   label: string;
   onClick?: () => void;
   href?: string;
