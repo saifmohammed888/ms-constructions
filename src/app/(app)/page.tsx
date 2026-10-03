@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, ClipboardList as ClipboardIcon, Copy, Download, Plus, Sparkles, TriangleAlert } from "lucide-react";
+import { Copy, Download, Plus, Sparkles, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,10 +110,6 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <QuickAction icon={ClipboardIcon} label="Task" onClick={() => setTaskOpen(true)} />
-      </div>
-
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Project attention summary">
         <AttentionCard href="/tasks" title="Work needing attention" value={d.overdueCount ? `${d.overdueCount} overdue` : "On track"} detail={d.thisWeek.length ? `${d.thisWeek.length} task${d.thisWeek.length === 1 ? "" : "s"} this week` : "No tasks due this week"} tone={d.overdueCount ? "red" : "green"} />
         <AttentionCard href="/expenses" title="Payments to plan" value={formatInr(d.duePayments.reduce((sum, payment) => sum + Number(payment.amount), 0))} detail={`${d.duePayments.length} upcoming or overdue`} tone={d.duePayments.length ? "amber" : "green"} />
@@ -217,20 +213,4 @@ export default function DashboardPage() {
 function AttentionCard({ href, title, value, detail, tone }: { href: string; title: string; value: string; detail: string; tone: "red" | "amber" | "blue" | "green" }) {
   const styles = { red: "border-red-200 bg-red-50 text-red-950", amber: "border-amber-200 bg-amber-50 text-amber-950", blue: "border-blue-200 bg-blue-50 text-blue-950", green: "border-emerald-200 bg-emerald-50 text-emerald-950" };
   return <Link href={href} className={`rounded-2xl border p-4 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${styles[tone]}`}><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium uppercase tracking-wide opacity-70">{title}</p>{tone === "red" && <TriangleAlert className="size-4" aria-hidden="true" />}</div><p className="mt-2 text-xl font-semibold">{value}</p><p className="mt-1 text-xs opacity-70">{detail}</p></Link>;
-}
-
-function QuickAction({
-  icon: Icon,
-  label,
-  onClick,
-  href,
-}: {
-  icon: typeof ClipboardIcon;
-  label: string;
-  onClick?: () => void;
-  href?: string;
-}) {
-  const content = <><span className="flex size-9 items-center justify-center rounded-xl bg-zinc-100"><Icon className="size-4" /></span><span>{label}</span><ArrowRight className="ml-auto size-4 text-muted-foreground" /></>;
-  if (href) return <Link href={href} className="flex min-h-16 items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 text-sm font-medium shadow-sm transition-transform active:scale-[.98]">{content}</Link>;
-  return <button onClick={onClick} className="flex min-h-16 items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 text-left text-sm font-medium shadow-sm transition-transform active:scale-[.98]">{content}</button>;
 }
