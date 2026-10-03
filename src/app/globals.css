@@ -150,6 +150,7 @@
   .overflow-x-auto:has(table) td { @apply h-14 px-4 align-middle; }
   .overflow-x-auto:has(table) tbody tr { @apply border-t border-black/5 transition-colors hover:bg-stone-50/70; }
   .overflow-x-auto:has(table) tbody tr > td:last-child { @apply text-right; }
+  .library-page > .grid.grid-cols-2 { display: none; }
 }
 
 @media (max-width: 767px) {

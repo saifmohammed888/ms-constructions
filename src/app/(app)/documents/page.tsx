@@ -157,7 +157,7 @@ export default function DocumentsPage() {
   }, {}));
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="library-page mx-auto flex max-w-5xl flex-col gap-4">
       <UploadOverlay show={uploadState.total > 0 && uploadState.done < uploadState.total} />
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -241,7 +241,7 @@ export default function DocumentsPage() {
         <LibraryStat label="Documents" value={`${otherDocuments}`} detail={`${formatBytes(documentBytes)} · PDFs and other files`} />
       </section>
 
-      {!list.isLoading && imageDocuments.length > 0 && <ImageTable items={imageDocuments} selected={selectedImage} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} />}
+      {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} />}
 
       {list.isLoading ? (
         <CardSkeleton rows={6} />
@@ -318,7 +318,7 @@ export default function DocumentsPage() {
 }
 
 function ImageTable({ items, selected, onSelect, onView, onEdit, onAttach }: { items: Doc[]; selected: Doc | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void }) {
-  return <section className="table-shell" aria-label="Images"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">Images</h2><span className="text-xs text-muted-foreground">{items.length} files</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button></td></tr>)}</tbody></table></section>;
+  return <section className="table-shell" aria-label="Library files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button></td></tr>)}</tbody></table></section>;
 }
 
 function formatBytes(bytes: number) {
