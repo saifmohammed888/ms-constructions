@@ -140,6 +140,16 @@
   .search-field { @apply min-h-11 rounded-xl border-black/10 bg-white shadow-none focus-visible:ring-2 focus-visible:ring-primary/30; }
   .filter-pills { scrollbar-width: none; }
   .filter-pills::-webkit-scrollbar { display: none; }
+  .table-shell { @apply overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm; }
+  .table-shell th { @apply h-11 bg-stone-50 px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground; }
+  .table-shell td { @apply h-14 px-4 align-middle; }
+  .table-shell tbody tr { @apply border-t border-black/5 transition-colors hover:bg-stone-50/70; }
+  .table-shell tbody tr > td:last-child { @apply text-right; }
+  .overflow-x-auto:has(table) { @apply overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm; }
+  .overflow-x-auto:has(table) th { @apply h-11 bg-stone-50 px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground; }
+  .overflow-x-auto:has(table) td { @apply h-14 px-4 align-middle; }
+  .overflow-x-auto:has(table) tbody tr { @apply border-t border-black/5 transition-colors hover:bg-stone-50/70; }
+  .overflow-x-auto:has(table) tbody tr > td:last-child { @apply text-right; }
 }
 
 @media (max-width: 767px) {
@@ -160,3 +170,6 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+@keyframes soft-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.animate-pulse { background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / .6), transparent); background-size: 200% 100%; animation: soft-shimmer 1.8s ease-in-out infinite; }

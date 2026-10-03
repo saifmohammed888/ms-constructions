@@ -21,6 +21,7 @@ function kind(mime: string | null, name: string) {
 
 export function FileViewer({ doc }: { doc: Doc }) {
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
   const t = kind(doc.mimeType, doc.name);
   const src = `/api/documents/${doc.id}/file`;
   const drivePreview = `https://drive.google.com/file/d/${doc.driveFileId}/preview`;
@@ -28,7 +29,8 @@ export function FileViewer({ doc }: { doc: Doc }) {
   if (failed || t === "other") {
     return (
       <div className="relative h-[min(70vh,720px)] w-full overflow-hidden rounded-xl border bg-stone-100">
-        <iframe title={doc.name} className="h-full w-full" src={drivePreview} />
+        {!ready && <ViewerLoading label="Opening preview…" />}
+        <iframe title={doc.name} className="h-full w-full" src={drivePreview} onLoad={() => setReady(true)} />
       </div>
     );
   }
@@ -37,10 +39,12 @@ export function FileViewer({ doc }: { doc: Doc }) {
     return (
       <div className="relative flex max-h-[70vh] min-h-64 items-center justify-center overflow-auto rounded-xl border bg-stone-950">
         {/* eslint-disable-next-line @next/next/no-img-element */}
+        {!ready && <ViewerLoading label="Loading image…" />}
         <img
           src={src}
           alt={doc.name}
           className="max-h-[70vh] w-full object-contain"
+          onLoad={() => setReady(true)}
           onError={() => setFailed(true)}
         />
       </div>
@@ -49,11 +53,16 @@ export function FileViewer({ doc }: { doc: Doc }) {
 
   return (
     <div className="relative h-[min(70vh,720px)] w-full overflow-hidden rounded-xl border bg-stone-100">
-      <object data={src} type="application/pdf" className="h-full w-full">
-        <iframe title={doc.name} className="h-full w-full" src={drivePreview} />
+      {!ready && <ViewerLoading label="Loading PDF…" />}
+      <object data={src} type="application/pdf" className="h-full w-full" onLoad={() => setReady(true)}>
+        <iframe title={doc.name} className="h-full w-full" src={drivePreview} onLoad={() => setReady(true)} />
       </object>
     </div>
   );
+}
+
+function ViewerLoading({ label }: { label: string }) {
+  return <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-100/90 text-sm text-muted-foreground backdrop-blur-[2px]"><div className="flex items-center gap-2 rounded-full border bg-white px-4 py-2 shadow-sm"><Spinner /><span>{label}</span></div></div>;
 }
 
 export function FileThumb({
