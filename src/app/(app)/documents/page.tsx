@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, FileUp, Image as ImageIcon, Pencil, Trash2, Upload } from "lucide-react";
+import { Check, Eye, FileUp, Image as ImageIcon, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/format";
 import { FileThumb, FileViewer, UploadOverlay } from "@/components/file-viewer";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 
 type Doc = {
@@ -39,6 +40,8 @@ export default function DocumentsPage() {
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<Doc | null>(null);
+  const [selectedImage, setSelectedImage] = useState<Doc | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
   const [editing, setEditing] = useState<Doc | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Doc | null>(null);
   const [uploadCategory, setUploadCategory] = useState<DocCategory>((category as DocCategory) || "misc");
@@ -59,6 +62,23 @@ export default function DocumentsPage() {
       if (q) s.set("q", q);
       return fetch(`/api/documents?${s}`).then((r) => r.json()) as Promise<Doc[]>;
     },
+  });
+
+  const expenses = useQuery({
+    queryKey: ["expenses", "attach-invoice"],
+    enabled: attachOpen,
+    queryFn: () => fetch("/api/expenses").then((r) => r.json()) as Promise<{ items: { id: string; amount: string; category: string; date: string; receiptDocId: string | null }[] }>,
+  });
+
+  const attachInvoice = useMutation({
+    mutationFn: async (expenseId: string) => {
+      if (!selectedImage) throw new Error("Select an image first");
+      const res = await fetch(`/api/expenses/${expenseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ receiptDocId: selectedImage.id }) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Could not attach invoice");
+    },
+    onSuccess: () => { toast.success("Invoice attached to expense"); setAttachOpen(false); setSelectedImage(null); },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const uploadOne = async (file: File, selectedCategory: DocCategory) => {
@@ -215,7 +235,7 @@ export default function DocumentsPage() {
         <LibraryStat label="Documents" value={`${otherDocuments}`} detail={`${formatBytes(documentBytes)} · PDFs and other files`} />
       </section>
 
-      {!list.isLoading && imageDocuments.length > 0 && <ImageTable items={imageDocuments} onView={setPreview} />}
+      {!list.isLoading && imageDocuments.length > 0 && <ImageTable items={imageDocuments} selected={selectedImage} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} />}
 
       {list.isLoading ? (
         <CardSkeleton rows={6} />
@@ -258,6 +278,18 @@ export default function DocumentsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={attachOpen} onOpenChange={setAttachOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Attach invoice to expense</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Choose the expense for <span className="font-medium text-foreground">{selectedImage?.name}</span>.</p>
+          <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+            {(expenses.data?.items ?? []).map((expense) => <button key={expense.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm transition-colors hover:bg-muted" onClick={() => attachInvoice.mutate(expense.id)} disabled={attachInvoice.isPending}><span><span className="font-medium">{expense.category}</span><span className="ml-2 text-muted-foreground">{expense.date}</span></span><span className="font-semibold">₹{Number(expense.amount).toLocaleString("en-IN")}</span></button>)}
+            {!expenses.isLoading && !expenses.data?.items.length && <p className="py-6 text-center text-sm text-muted-foreground">No expenses available yet.</p>}
+            {expenses.isLoading && <div className="flex justify-center py-6"><Spinner /></div>}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(editing)} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
@@ -279,8 +311,8 @@ export default function DocumentsPage() {
   );
 }
 
-function ImageTable({ items, onView }: { items: Doc[]; onView: (doc: Doc) => void }) {
-  return <section className="table-shell" aria-label="Images"><div className="flex items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">Images</h2><span className="text-xs text-muted-foreground">{items.length} files · select a row to view</span></div><table className="w-full text-sm"><thead><tr><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td className="max-w-[24rem] truncate font-medium">{doc.name}</td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button></td></tr>)}</tbody></table></section>;
+function ImageTable({ items, selected, onSelect, onView, onEdit, onAttach }: { items: Doc[]; selected: Doc | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void }) {
+  return <section className="table-shell" aria-label="Images"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">Images</h2><span className="text-xs text-muted-foreground">{items.length} files</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button></td></tr>)}</tbody></table></section>;
 }
 
 function formatBytes(bytes: number) {
