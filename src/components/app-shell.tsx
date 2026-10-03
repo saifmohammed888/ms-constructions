@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -7,11 +8,13 @@ import {
   FileText,
   Home,
   IndianRupee,
+  MoreHorizontal,
   Plus,
   Settings,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -21,6 +24,8 @@ const NAV = [
   { href: "/contacts", label: "People", icon: Users },
 ];
 
+const MOBILE_NAV = [NAV[0], NAV[2], NAV[3], NAV[1]];
+
 export function AppShell({
   children,
   projectName,
@@ -29,6 +34,7 @@ export function AppShell({
   projectName: string;
 }) {
   const path = usePathname();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   return (
     <div className="min-h-dvh bg-[#f7f7f5] text-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-white p-5 md:flex md:flex-col">
@@ -84,11 +90,24 @@ export function AppShell({
         <main className="px-4 pb-24 pt-5 md:px-8 md:pb-10">{children}</main>
       </div>
 
-      <Link href="/expenses" aria-label="Add something" className="fixed bottom-[4.6rem] right-4 z-40 flex size-14 items-center justify-center rounded-full bg-zinc-950 text-white shadow-xl transition-transform active:scale-95 md:hidden">
+      <button type="button" aria-label="Add to project" onClick={() => setQuickAddOpen(true)} className="fixed bottom-[4.6rem] right-4 z-40 flex size-14 items-center justify-center rounded-full bg-[#a84e20] text-white shadow-xl transition-transform active:scale-95 md:hidden">
         <Plus className="size-6" />
-      </Link>
+      </button>
+      <Sheet open={quickAddOpen} onOpenChange={setQuickAddOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl pb-8">
+          <SheetHeader><SheetTitle>Quick add</SheetTitle></SheetHeader>
+          <div className="grid grid-cols-2 gap-3 px-4">
+            <QuickLink href="/expenses" label="Add expense" onClick={() => setQuickAddOpen(false)} />
+            <QuickLink href="/tasks" label="Add task" onClick={() => setQuickAddOpen(false)} />
+            <QuickLink href="/documents" label="Upload document" onClick={() => setQuickAddOpen(false)} />
+            <QuickLink href="/documents" label="Add site photo" onClick={() => setQuickAddOpen(false)} />
+            <QuickLink href="/contacts" label="People" onClick={() => setQuickAddOpen(false)} />
+            <QuickLink href="/settings" label="Settings" onClick={() => setQuickAddOpen(false)} />
+          </div>
+        </SheetContent>
+      </Sheet>
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-black/5 bg-white/95 backdrop-blur md:hidden">
-        {NAV.map((item) => {
+        {MOBILE_NAV.map((item) => {
           const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
           return (
             <Link
@@ -104,7 +123,12 @@ export function AppShell({
             </Link>
           );
         })}
+        <button type="button" onClick={() => setQuickAddOpen(true)} className={cn("flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]", path.startsWith("/contacts") || path.startsWith("/settings") ? "font-semibold text-foreground" : "text-muted-foreground")}><MoreHorizontal className="size-5" />More</button>
       </nav>
     </div>
   );
+}
+
+function QuickLink({ href, label, onClick }: { href: string; label: string; onClick: () => void }) {
+  return <Link href={href} onClick={onClick} className="flex min-h-14 items-center rounded-2xl border bg-white px-4 text-sm font-medium shadow-sm transition-colors hover:bg-zinc-50">{label}</Link>;
 }
