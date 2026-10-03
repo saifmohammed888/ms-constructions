@@ -80,21 +80,6 @@ export function FileThumb({
       </div>
     );
   }
-  if (t === "pdf" && doc.thumbnailUrl) {
-    return (
-      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-stone-100 p-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={doc.thumbnailUrl} alt={doc.name} className="max-h-full max-w-full object-contain shadow-sm" />
-      </div>
-    );
-  }
-  if (t === "pdf") {
-    return (
-      <div className="relative h-full w-full overflow-hidden bg-stone-100">
-        <iframe title={`${doc.name} preview`} src={`/api/documents/${doc.id}/file#page=1&view=FitH`} className="pointer-events-none absolute inset-0 h-[160%] w-full origin-top scale-[.72] bg-white" />
-      </div>
-    );
-  }
   const Icon = /xls|xlsx|csv/.test(ext.toLowerCase()) ? FileSpreadsheet : /doc|docx/.test(ext.toLowerCase()) ? FileType2 : FileText;
   return (
     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-stone-50 to-stone-200 text-muted-foreground">
