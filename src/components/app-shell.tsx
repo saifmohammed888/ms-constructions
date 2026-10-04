@@ -124,7 +124,18 @@ export function AppShell({
             </Link>
           );
         })}
-        <button type="button" onClick={() => setQuickAddOpen(true)} className={cn("flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]", path.startsWith("/contacts") || path.startsWith("/settings") ? "font-semibold text-foreground" : "text-muted-foreground")}><MoreHorizontal className="size-5" />More</button>
+        <Link
+          href="/more"
+          className={cn(
+            "flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]",
+            path.startsWith("/more") || path.startsWith("/contacts") || path.startsWith("/settings")
+              ? "font-semibold text-foreground"
+              : "text-muted-foreground",
+          )}
+        >
+          <MoreHorizontal className="size-5" />
+          More
+        </Link>
       </nav>
     </div>
   );
