@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ResponsiveForm } from "@/components/responsive-form";
 import { Spinner } from "@/components/ui/spinner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
@@ -25,6 +26,7 @@ import {
 import { todayIso } from "@/lib/format";
 
 type Contact = { id: string; name: string };
+type ReceiptDocument = { id: string; name: string; category: string; mimeType: string | null; uploadedAt: string };
 type Expense = {
   id?: string;
   amount: number | string;
@@ -68,6 +70,13 @@ export function ExpenseForm({
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [receiptPickerOpen, setReceiptPickerOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptDocument | null>(null);
+  const documents = useQuery({
+    queryKey: ["documents", "receipt-picker"],
+    enabled: receiptPickerOpen,
+    queryFn: () => json<ReceiptDocument[]>("/api/documents"),
+  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -81,6 +90,7 @@ export function ExpenseForm({
         if (up.ok) receiptDocId = body.id;
         else toast.error(body.error || "Receipt saved as expense only — connect Google for photos");
       }
+      if (!receipt && selectedReceipt) receiptDocId = selectedReceipt.id;
       const payload = {
         amount: Number(amount),
         category,
@@ -208,12 +218,29 @@ export function ExpenseForm({
             className="mt-1.5 min-h-11"
             onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
           />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" className="min-h-10" onClick={() => setReceiptPickerOpen(true)}>
+              Choose existing receipt
+            </Button>
+            {selectedReceipt && <span className="max-w-full truncate text-xs text-muted-foreground">Selected: {selectedReceipt.name}</span>}
+          </div>
         </div>
         <Button type="submit" className="min-h-11 gap-2" disabled={save.isPending}>
           {save.isPending && <Spinner />}
           {save.isPending ? "Saving…" : "Save expense"}
         </Button>
       </form>
+      <Dialog open={receiptPickerOpen} onOpenChange={setReceiptPickerOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader><DialogTitle>Choose existing receipt</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Select a file already stored in your Library. It will not be uploaded again.</p>
+          <div className="flex flex-col gap-2">
+            {(documents.data ?? []).map((doc) => <button key={doc.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm hover:bg-muted" onClick={() => { setSelectedReceipt(doc); setReceipt(null); setReceiptPickerOpen(false); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{doc.category}</span></button>)}
+            {documents.isLoading && <div className="flex justify-center py-6"><Spinner /></div>}
+            {!documents.isLoading && !documents.data?.length && <p className="py-6 text-center text-sm text-muted-foreground">No documents uploaded yet.</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </ResponsiveForm>
   );
 }
