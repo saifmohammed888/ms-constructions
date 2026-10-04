@@ -47,6 +47,7 @@ export default function DocumentsPage() {
   const [uploadCategory, setUploadCategory] = useState<DocCategory>((category as DocCategory) || "misc");
   const [dragging, setDragging] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [sharingId, setSharingId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -146,6 +147,40 @@ export default function DocumentsPage() {
 
   const allDocuments = list.data ?? [];
 
+  const shareDocumentFile = async (doc: Doc) => {
+    const shareLink = documentShareLink(doc);
+    try {
+      setSharingId(doc.id);
+      if (!navigator.share) {
+        window.open(whatsappShareUrl(doc), "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      const response = await fetch(`/api/documents/${doc.id}/file`);
+      if (!response.ok) throw new Error("Could not prepare file for sharing");
+      const blob = await response.blob();
+      const file = new File([blob], doc.name, { type: blob.type || doc.mimeType || "application/octet-stream" });
+      const payload = {
+        title: doc.name,
+        text: "MS Construction document",
+        files: [file],
+      };
+
+      if (navigator.canShare?.(payload)) {
+        await navigator.share(payload);
+        return;
+      }
+
+      await navigator.share({ title: doc.name, text: `MS Construction document: ${doc.name}`, url: shareLink });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      toast.error(error instanceof Error ? error.message : "Could not share file");
+      window.open(whatsappShareUrl(doc), "_blank", "noopener,noreferrer");
+    } finally {
+      setSharingId(null);
+    }
+  };
+
   return (
     <div className="library-page mx-auto flex max-w-5xl flex-col gap-4">
       <UploadOverlay show={uploadState.total > 0 && uploadState.done < uploadState.total} />
@@ -224,7 +259,7 @@ export default function DocumentsPage() {
         ))}
       </div>
 
-      {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} />}
+      {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} sharingId={sharingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} />}
 
       {list.isLoading ? (
         <CardSkeleton rows={6} />
@@ -252,9 +287,9 @@ export default function DocumentsPage() {
                 <a className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm" href={`/api/documents/${preview.id}/file`} download={preview.name}>
                   Download
                 </a>
-                <a className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm" href={whatsappShareUrl(preview)} target="_blank" rel="noreferrer">
-                  <MessageCircle className="size-4" /> WhatsApp
-                </a>
+                <Button variant="outline" className="min-h-11" onClick={() => shareDocumentFile(preview)} disabled={sharingId === preview.id}>
+                  {sharingId === preview.id ? <Spinner /> : <MessageCircle className="size-4" />} Share file
+                </Button>
                 <Button variant="outline" className="min-h-11" onClick={() => setEditing(preview)}>
                   <Pencil className="size-4" /> Rename
                 </Button>
@@ -301,8 +336,8 @@ export default function DocumentsPage() {
   );
 }
 
-function ImageTable({ items, selected, onSelect, onView, onEdit, onAttach }: { items: Doc[]; selected: Doc | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void }) {
-  return <section className="table-shell" aria-label="Library files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button><a className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-colors hover:bg-muted" href={whatsappShareUrl(doc)} target="_blank" rel="noreferrer" aria-label={`Share ${doc.name} on WhatsApp`} title="Share on WhatsApp"><MessageCircle className="size-3.5" />WhatsApp</a></div></td></tr>)}</tbody></table></section>;
+function ImageTable({ items, selected, sharingId, onSelect, onView, onEdit, onAttach, onShare }: { items: Doc[]; selected: Doc | null; sharingId: string | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void; onShare: (doc: Doc) => void }) {
+  return <section className="table-shell" aria-label="Library files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button><Button variant="outline" size="sm" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}Share</Button></div></td></tr>)}</tbody></table></section>;
 }
 
 function documentShareLink(doc: Doc) {
