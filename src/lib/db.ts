@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   ip text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS project_trackers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), project_id uuid, tracker text NOT NULL, title text NOT NULL, data jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS expenses_date_idx ON expenses (date DESC);
 CREATE INDEX IF NOT EXISTS expenses_category_idx ON expenses (category);
 CREATE INDEX IF NOT EXISTS expenses_contact_idx ON expenses (contact_id);

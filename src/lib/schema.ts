@@ -220,6 +220,16 @@ export const loginAttempts = pgTable("login_attempts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const projectTrackers = pgTable("project_trackers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id"),
+  tracker: text("tracker").notNull(),
+  title: text("title").notNull(),
+  data: jsonb("data").$type<Record<string, string | number | null>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const schema = {
   projects,
   contacts,
@@ -234,4 +244,5 @@ export const schema = {
   decisions,
   approvals,
   drawingRevisions,
+  projectTrackers,
 };

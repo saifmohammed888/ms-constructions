@@ -22,6 +22,7 @@ const NAV = [
   { href: "/tasks", label: "Work", icon: ClipboardList },
   { href: "/expenses", label: "Money", icon: IndianRupee },
   { href: "/contacts", label: "People", icon: Users },
+  { href: "/more", label: "More", icon: MoreHorizontal },
 ];
 
 const MOBILE_NAV = [NAV[0], NAV[2], NAV[3], NAV[1]];
