@@ -17,6 +17,7 @@ import {
 import { ResponsiveForm } from "@/components/responsive-form";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Check } from "lucide-react";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
@@ -26,7 +27,7 @@ import {
 import { todayIso } from "@/lib/format";
 
 type Contact = { id: string; name: string };
-type ReceiptDocument = { id: string; name: string; category: string; mimeType: string | null; uploadedAt: string };
+type ReceiptDocument = { id: string; name: string; category?: string; mimeType: string | null; uploadedAt?: string };
 type Expense = {
   id?: string;
   amount: number | string;
@@ -39,6 +40,7 @@ type Expense = {
   notes?: string | null;
   receiptDocId?: string | null;
   receiptDocIds?: string[];
+  receiptDocuments?: ReceiptDocument[];
 };
 
 async function json<T>(url: string, init?: RequestInit) {
@@ -73,7 +75,7 @@ export function ExpenseForm({
   const [receipts, setReceipts] = useState<File[]>([]);
   const [receiptPickerOpen, setReceiptPickerOpen] = useState(false);
   const [receiptSearch, setReceiptSearch] = useState("");
-  const [selectedReceipts, setSelectedReceipts] = useState<ReceiptDocument[]>([]);
+  const [selectedReceipts, setSelectedReceipts] = useState<ReceiptDocument[]>(initial?.receiptDocuments ?? []);
   const documents = useQuery({
     queryKey: ["documents", "receipt-picker"],
     enabled: receiptPickerOpen,
@@ -239,7 +241,7 @@ export function ExpenseForm({
           <p className="text-sm text-muted-foreground">Select a file already stored in your Library. It will not be uploaded again.</p>
           <Input autoFocus className="min-h-11" placeholder="Search by file title" value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
           <div className="flex flex-col gap-2">
-            {receiptSearch.trim() && (documents.data ?? []).filter((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())).slice(0, 12).map((doc) => <button key={doc.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm hover:bg-muted" onClick={() => { setSelectedReceipts((current) => current.some((item) => item.id === doc.id) ? current.filter((item) => item.id !== doc.id) : [...current, doc]); setReceipts([]); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{selectedReceipts.some((item) => item.id === doc.id) ? "Added" : "Add"}</span></button>)}
+            {receiptSearch.trim() && (documents.data ?? []).filter((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())).slice(0, 12).map((doc) => { const selected = selectedReceipts.some((item) => item.id === doc.id); return <button key={doc.id} type="button" aria-pressed={selected} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : ""}`} onClick={() => { setSelectedReceipts((current) => selected ? current.filter((item) => item.id !== doc.id) : [...current, doc]); setReceipts([]); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className={`ml-3 flex shrink-0 items-center gap-1 text-xs font-medium ${selected ? "text-primary" : "text-muted-foreground"}`}>{selected && <Check className="size-4" />}{selected ? "Selected" : "Add"}</span></button>; })}
             {documents.isLoading && <div className="flex justify-center py-6"><Spinner /></div>}
             {!documents.isLoading && !receiptSearch.trim() && <p className="py-6 text-center text-sm text-muted-foreground">Start typing to search your Library.</p>}
             {!documents.isLoading && receiptSearch.trim() && !(documents.data ?? []).some((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())) && <p className="py-6 text-center text-sm text-muted-foreground">No matching files found.</p>}
