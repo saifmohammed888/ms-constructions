@@ -71,6 +71,7 @@ export function ExpenseForm({
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [receipt, setReceipt] = useState<File | null>(null);
   const [receiptPickerOpen, setReceiptPickerOpen] = useState(false);
+  const [receiptSearch, setReceiptSearch] = useState("");
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptDocument | null>(null);
   const documents = useQuery({
     queryKey: ["documents", "receipt-picker"],
@@ -234,10 +235,12 @@ export function ExpenseForm({
         <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader><DialogTitle>Choose existing receipt</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Select a file already stored in your Library. It will not be uploaded again.</p>
+          <Input autoFocus className="min-h-11" placeholder="Search by file title" value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
           <div className="flex flex-col gap-2">
-            {(documents.data ?? []).map((doc) => <button key={doc.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm hover:bg-muted" onClick={() => { setSelectedReceipt(doc); setReceipt(null); setReceiptPickerOpen(false); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{doc.category}</span></button>)}
+            {(documents.data ?? []).filter((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())).slice(0, 12).map((doc) => <button key={doc.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm hover:bg-muted" onClick={() => { setSelectedReceipt(doc); setReceipt(null); setReceiptPickerOpen(false); setReceiptSearch(""); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{doc.category}</span></button>)}
             {documents.isLoading && <div className="flex justify-center py-6"><Spinner /></div>}
-            {!documents.isLoading && !documents.data?.length && <p className="py-6 text-center text-sm text-muted-foreground">No documents uploaded yet.</p>}
+            {!documents.isLoading && !receiptSearch.trim() && <p className="py-6 text-center text-sm text-muted-foreground">Start typing to search your Library.</p>}
+            {!documents.isLoading && receiptSearch.trim() && !(documents.data ?? []).some((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())) && <p className="py-6 text-center text-sm text-muted-foreground">No matching files found.</p>}
           </div>
         </DialogContent>
       </Dialog>
