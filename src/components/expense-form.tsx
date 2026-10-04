@@ -38,6 +38,7 @@ type Expense = {
   dueDate?: string | null;
   notes?: string | null;
   receiptDocId?: string | null;
+  receiptDocIds?: string[];
 };
 
 async function json<T>(url: string, init?: RequestInit) {
@@ -69,10 +70,10 @@ export function ExpenseForm({
   const [paymentStatus, setPaymentStatus] = useState(initial?.paymentStatus ?? "paid");
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [receipt, setReceipt] = useState<File | null>(null);
+  const [receipts, setReceipts] = useState<File[]>([]);
   const [receiptPickerOpen, setReceiptPickerOpen] = useState(false);
   const [receiptSearch, setReceiptSearch] = useState("");
-  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptDocument | null>(null);
+  const [selectedReceipts, setSelectedReceipts] = useState<ReceiptDocument[]>([]);
   const documents = useQuery({
     queryKey: ["documents", "receipt-picker"],
     enabled: receiptPickerOpen,
@@ -81,17 +82,16 @@ export function ExpenseForm({
 
   const save = useMutation({
     mutationFn: async () => {
-      let receiptDocId = initial?.receiptDocId ?? null;
-      if (receipt) {
+      const receiptDocIds = [...selectedReceipts.map((doc) => doc.id), ...(initial?.receiptDocIds ?? (initial?.receiptDocId ? [initial.receiptDocId] : []))];
+      for (const receipt of receipts) {
         const fd = new FormData();
         fd.set("file", receipt);
         fd.set("category", "receipts");
         const up = await fetch("/api/documents/upload", { method: "POST", body: fd });
         const body = await up.json();
-        if (up.ok) receiptDocId = body.id;
+        if (up.ok) receiptDocIds.push(body.id);
         else toast.error(body.error || "Receipt saved as expense only — connect Google for photos");
       }
-      if (!receipt && selectedReceipt) receiptDocId = selectedReceipt.id;
       const payload = {
         amount: Number(amount),
         category,
@@ -101,7 +101,7 @@ export function ExpenseForm({
         paymentStatus,
         dueDate: paymentStatus === "due" ? dueDate || null : null,
         notes: notes || null,
-        receiptDocId,
+        receiptDocIds: [...new Set(receiptDocIds)],
       };
       if (initial?.id) {
         return json(`/api/expenses/${initial.id}`, {
@@ -217,13 +217,15 @@ export function ExpenseForm({
             accept="image/*,application/pdf"
             capture="environment"
             className="mt-1.5 min-h-11"
-            onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
+            multiple
+            onChange={(e) => setReceipts(Array.from(e.target.files ?? []))}
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" className="min-h-10" onClick={() => setReceiptPickerOpen(true)}>
               Choose existing receipt
             </Button>
-            {selectedReceipt && <span className="max-w-full truncate text-xs text-muted-foreground">Selected: {selectedReceipt.name}</span>}
+            {selectedReceipts.length > 0 && <span className="max-w-full truncate text-xs text-muted-foreground">{selectedReceipts.length} existing receipt{selectedReceipts.length === 1 ? "" : "s"} selected</span>}
+            {receipts.length > 0 && <span className="max-w-full truncate text-xs text-muted-foreground">{receipts.length} file{receipts.length === 1 ? "" : "s"} ready to upload</span>}
           </div>
         </div>
         <Button type="submit" className="min-h-11 gap-2" disabled={save.isPending}>
@@ -237,7 +239,7 @@ export function ExpenseForm({
           <p className="text-sm text-muted-foreground">Select a file already stored in your Library. It will not be uploaded again.</p>
           <Input autoFocus className="min-h-11" placeholder="Search by file title" value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
           <div className="flex flex-col gap-2">
-            {(documents.data ?? []).filter((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())).slice(0, 12).map((doc) => <button key={doc.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm hover:bg-muted" onClick={() => { setSelectedReceipt(doc); setReceipt(null); setReceiptPickerOpen(false); setReceiptSearch(""); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{doc.category}</span></button>)}
+            {receiptSearch.trim() && (documents.data ?? []).filter((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())).slice(0, 12).map((doc) => <button key={doc.id} type="button" className="flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm hover:bg-muted" onClick={() => { setSelectedReceipts((current) => current.some((item) => item.id === doc.id) ? current.filter((item) => item.id !== doc.id) : [...current, doc]); setReceipts([]); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className="ml-3 shrink-0 text-xs text-muted-foreground">{selectedReceipts.some((item) => item.id === doc.id) ? "Added" : "Add"}</span></button>)}
             {documents.isLoading && <div className="flex justify-center py-6"><Spinner /></div>}
             {!documents.isLoading && !receiptSearch.trim() && <p className="py-6 text-center text-sm text-muted-foreground">Start typing to search your Library.</p>}
             {!documents.isLoading && receiptSearch.trim() && !(documents.data ?? []).some((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())) && <p className="py-6 text-center text-sm text-muted-foreground">No matching files found.</p>}

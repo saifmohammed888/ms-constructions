@@ -34,6 +34,7 @@ export const expenseSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   receiptDocId: z.string().uuid().optional().nullable(),
+  receiptDocIds: z.array(z.string().uuid()).max(50).optional(),
 });
 
 export const taskSchema = z.object({

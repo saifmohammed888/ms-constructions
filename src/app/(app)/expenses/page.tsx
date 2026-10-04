@@ -32,6 +32,8 @@ type Expense = {
   paymentStatus: string;
   dueDate: string | null;
   receiptDocId: string | null;
+  receiptDocIds?: string[];
+  receiptDocuments?: ReceiptDocument[];
 };
 
 type ReceiptDocument = { id: string; name: string; driveFileId: string; mimeType: string | null; webViewLink: string | null };
@@ -62,11 +64,6 @@ function ExpensesInner() {
       const res = await fetch(`/api/expenses?${query}`);
       return res.json() as Promise<{ items: Expense[]; total: number }>;
     },
-  });
-  const documents = useQuery({
-    queryKey: ["documents", "expense-detail"],
-    enabled: Boolean(detail?.receiptDocId),
-    queryFn: () => fetch("/api/documents").then((r) => r.json()) as Promise<ReceiptDocument[]>,
   });
 
   const del = useMutation({
@@ -165,13 +162,13 @@ function ExpensesInner() {
             : { amount: "", category: "misc", date: todayIso() }
         }
       />
-      <ExpenseDetail expense={detail} document={documents.data?.find((doc) => doc.id === detail?.receiptDocId) ?? null} onClose={() => setDetail(null)} />
+      <ExpenseDetail expense={detail} documents={detail?.receiptDocuments ?? []} onClose={() => setDetail(null)} />
     </div>
   );
 }
 
-function ExpenseDetail({ expense, document, onClose }: { expense: Expense | null; document: ReceiptDocument | null; onClose: () => void }) {
-  return <Dialog open={Boolean(expense)} onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Expense details</DialogTitle></DialogHeader>{expense && <div className="flex flex-col gap-5"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[["Amount", formatInr(expense.amount)], ["Category", EXPENSE_CATEGORY_LABELS[expense.category as ExpenseCategory] ?? expense.category], ["Date", formatDate(expense.date)], ["Status", expense.paymentStatus === "due" ? PAYMENT_STATUS_LABELS.due : PAYMENT_STATUS_LABELS.paid]].map(([label, value]) => <div key={label} className="rounded-xl bg-muted/50 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}</div><div className="space-y-2 text-sm"><p><span className="text-muted-foreground">Payment mode:</span> {expense.paymentMode ? PAYMENT_MODE_LABELS[expense.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "Not set"}</p>{expense.dueDate && <p><span className="text-muted-foreground">Due date:</span> {formatDate(expense.dueDate)}</p>}<p><span className="text-muted-foreground">Notes:</span> {expense.notes || "No notes"}</p></div><div className="border-t pt-4"><p className="mb-3 text-sm font-semibold">Invoice / receipt</p>{document ? <><p className="mb-3 text-sm text-muted-foreground">{document.name}</p><FileViewer doc={document} /></> : <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No invoice or receipt attached.</p>}</div></div>}</DialogContent></Dialog>;
+function ExpenseDetail({ expense, documents, onClose }: { expense: Expense | null; documents: ReceiptDocument[]; onClose: () => void }) {
+  return <Dialog open={Boolean(expense)} onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Expense details</DialogTitle></DialogHeader>{expense && <div className="flex flex-col gap-5"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[["Amount", formatInr(expense.amount)], ["Category", EXPENSE_CATEGORY_LABELS[expense.category as ExpenseCategory] ?? expense.category], ["Date", formatDate(expense.date)], ["Status", expense.paymentStatus === "due" ? PAYMENT_STATUS_LABELS.due : PAYMENT_STATUS_LABELS.paid]].map(([label, value]) => <div key={label} className="rounded-xl bg-muted/50 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}</div><div className="space-y-2 text-sm"><p><span className="text-muted-foreground">Payment mode:</span> {expense.paymentMode ? PAYMENT_MODE_LABELS[expense.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "Not set"}</p>{expense.dueDate && <p><span className="text-muted-foreground">Due date:</span> {formatDate(expense.dueDate)}</p>}<p><span className="text-muted-foreground">Notes:</span> {expense.notes || "No notes"}</p></div><div className="border-t pt-4"><p className="mb-3 text-sm font-semibold">Invoices / receipts ({documents.length})</p>{documents.length ? <div className="flex flex-col gap-4">{documents.map((document) => <div key={document.id}><p className="mb-3 text-sm text-muted-foreground">{document.name}</p><FileViewer doc={document} /></div>)}</div> : <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No invoice or receipt attached.</p>}</div></div>}</DialogContent></Dialog>;
 }
 
 function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }

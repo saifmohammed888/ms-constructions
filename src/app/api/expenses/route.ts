@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { expenses } from "@/lib/schema";
+import { documents, expenseDocuments, expenses } from "@/lib/schema";
 import { expenseSchema } from "@/lib/zod-schemas";
 import { jsonError } from "@/lib/http";
 
@@ -23,7 +23,12 @@ export async function GET(req: NextRequest) {
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(desc(expenses.date), desc(expenses.createdAt));
   const total = rows.reduce((s, r) => s + Number(r.amount), 0);
-  return NextResponse.json({ items: rows, total });
+  const ids = rows.map((row) => row.id);
+  const links = ids.length ? await db.select().from(expenseDocuments).where(inArray(expenseDocuments.expenseId, ids)) : [];
+  const documentIds = [...new Set([...links.map((link) => link.documentId), ...rows.flatMap((row) => row.receiptDocId ? [row.receiptDocId] : [])])];
+  const docs = documentIds.length ? await db.select().from(documents).where(inArray(documents.id, documentIds)) : [];
+  const items = rows.map((row) => { const linked = links.filter((link) => link.expenseId === row.id).map((link) => link.documentId); const allIds = [...new Set([...linked, ...(row.receiptDocId ? [row.receiptDocId] : [])])]; return { ...row, receiptDocIds: allIds, receiptDocuments: docs.filter((doc) => allIds.includes(doc.id)) }; });
+  return NextResponse.json({ items, total });
 }
 
 export async function POST(req: NextRequest) {
@@ -41,8 +46,10 @@ export async function POST(req: NextRequest) {
       paymentStatus: parsed.data.paymentStatus ?? "paid",
       dueDate: parsed.data.dueDate || null,
       notes: parsed.data.notes || null,
-      receiptDocId: parsed.data.receiptDocId || null,
+      receiptDocId: parsed.data.receiptDocId || parsed.data.receiptDocIds?.[0] || null,
     })
     .returning();
+  const ids = parsed.data.receiptDocIds?.length ? parsed.data.receiptDocIds : parsed.data.receiptDocId ? [parsed.data.receiptDocId] : [];
+  if (ids.length) await db.insert(expenseDocuments).values(ids.map((documentId) => ({ expenseId: row.id, documentId }))).onConflictDoNothing();
   return NextResponse.json(row);
 }

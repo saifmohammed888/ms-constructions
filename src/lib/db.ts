@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   receipt_doc_id uuid REFERENCES documents(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS expense_documents (expense_id uuid NOT NULL REFERENCES expenses(id) ON DELETE CASCADE, document_id uuid NOT NULL REFERENCES documents(id) ON DELETE CASCADE, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE (expense_id, document_id));
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS project_id uuid;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'paid';
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS due_date date;

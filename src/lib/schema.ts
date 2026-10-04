@@ -78,6 +78,16 @@ export const expenses = pgTable(
   ],
 );
 
+export const expenseDocuments = pgTable(
+  "expense_documents",
+  {
+    expenseId: uuid("expense_id").notNull().references(() => expenses.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("expense_documents_pair_idx").on(t.expenseId, t.documentId)],
+);
+
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   projectId: uuid("project_id"),
