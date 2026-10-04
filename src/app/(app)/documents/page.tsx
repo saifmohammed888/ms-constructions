@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { DOC_CATEGORIES, DOC_CATEGORY_LABELS, type DocCategory } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
-import { FileThumb, FileViewer, UploadOverlay } from "@/components/file-viewer";
+import { FileViewer, UploadOverlay } from "@/components/file-viewer";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -145,16 +145,6 @@ export default function DocumentsPage() {
   });
 
   const allDocuments = list.data ?? [];
-  const isImage = (doc: Doc) => doc.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(doc.name);
-  const imageDocuments = allDocuments.filter(isImage);
-  const items = [...allDocuments].filter((doc) => !isImage(doc)).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
-  const otherDocuments = allDocuments.length - imageDocuments.length;
-  const photoBytes = imageDocuments.reduce((sum, doc) => sum + (doc.sizeBytes ?? 0), 0);
-  const documentBytes = allDocuments.filter((doc) => !isImage(doc)).reduce((sum, doc) => sum + (doc.sizeBytes ?? 0), 0);
-  const imageCategories = Object.entries(imageDocuments.reduce<Record<string, number>>((counts, doc) => {
-    counts[doc.category] = (counts[doc.category] ?? 0) + 1;
-    return counts;
-  }, {}));
 
   return (
     <div className="library-page mx-auto flex max-w-5xl flex-col gap-4">
@@ -234,13 +224,6 @@ export default function DocumentsPage() {
         ))}
       </div>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Library summary">
-        <LibraryStat label="Total files" value={`${allDocuments.length}`} detail="Documents and images" />
-        <LibraryStat label="Images" value={`${imageDocuments.length}`} detail={imageCategories.length ? imageCategories.map(([key, count]) => `${DOC_CATEGORY_LABELS[key as DocCategory] ?? key}: ${count}`).join(" · ") : "No images yet"} />
-        <LibraryStat label="Photo storage" value={formatBytes(photoBytes)} detail="Image files" />
-        <LibraryStat label="Documents" value={`${otherDocuments}`} detail={`${formatBytes(documentBytes)} · PDFs and other files`} />
-      </section>
-
       {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} />}
 
       {list.isLoading ? (
@@ -250,9 +233,7 @@ export default function DocumentsPage() {
           <p className="font-medium">No documents yet</p>
           <p className="mt-1 text-sm text-muted-foreground">Upload a drawing or approval PDF.</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{items.map((doc) => <div key={doc.id} className="group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><button className="block w-full text-left" onClick={() => setPreview(doc)} aria-label={`View ${doc.name}`}><div className="aspect-square size-20 w-full overflow-hidden bg-zinc-50 sm:size-auto"> <FileThumb doc={doc} /></div><div className="p-3"><p className="truncate text-sm font-medium">{doc.name}</p><p className="mt-1 truncate text-xs text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</p></div><div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/20 to-transparent p-3 text-left text-xs text-white opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"><p className="line-clamp-2 font-medium">{doc.name}</p><p className="mt-1 text-white/75">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category} · {formatDate(doc.uploadedAt)}</p>{doc.tags?.length ? <p className="mt-1 line-clamp-1 text-white/75">{doc.tags.join(" · ")}</p> : null}</div></button><div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"><Button variant="secondary" size="icon" className="size-8 bg-white/90" title="Rename document" onClick={() => setEditing(doc)}><Pencil className="size-3.5" /></Button><Button variant="destructive" size="icon" className="size-8" title="Delete document" onClick={() => setPendingDelete(doc)}><Trash2 className="size-3.5" /></Button></div><button className="sr-only" onClick={() => setPreview(doc)}><Eye className="size-4" />View</button></div>)}</div>
-      )}
+      ) : null}
 
       <Dialog open={Boolean(preview)} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-4xl">
