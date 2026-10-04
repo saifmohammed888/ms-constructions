@@ -50,6 +50,12 @@ export default function DocumentsPage() {
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeUploadCategory = category ? (category as DocCategory) : uploadCategory;
+
+  const selectCategory = (nextCategory: "" | DocCategory) => {
+    setCategory(nextCategory);
+    if (nextCategory) setUploadCategory(nextCategory);
+  };
 
   const settings = useQuery({
     queryKey: ["settings"],
@@ -95,7 +101,7 @@ export default function DocumentsPage() {
 
   const uploadFiles = async (files: File[]) => {
     if (!files.length) return;
-    const selectedCategory = uploadCategory || "misc";
+    const selectedCategory = activeUploadCategory || "misc";
     setUploadState({ done: 0, total: files.length, failed: 0 });
     let failed = 0;
     for (const file of files) {
@@ -236,7 +242,7 @@ export default function DocumentsPage() {
         <p className="mt-2 font-medium">Drop multiple files here</p>
         <p className="mt-1 text-sm text-muted-foreground">Choose a category once, then upload drawings, photos, or documents together.</p>
         <div className="mx-auto mt-3 flex max-w-sm items-center gap-2">
-          <Select value={uploadCategory} onValueChange={(v) => v && setUploadCategory(v as DocCategory)}>
+          <Select value={activeUploadCategory} onValueChange={(v) => v && setUploadCategory(v as DocCategory)}>
             <SelectTrigger className="min-h-11 flex-1"><SelectValue /></SelectTrigger>
             <SelectContent>{DOC_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{DOC_CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
           </Select>
@@ -249,11 +255,11 @@ export default function DocumentsPage() {
 
       <Input className="min-h-11" placeholder="Search name or tag" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="flex gap-2 overflow-x-auto pb-1">
-        <Button size="sm" className="min-h-9" variant={category === "" ? "default" : "outline"} onClick={() => setCategory("")}>
+        <Button size="sm" className="min-h-9" variant={category === "" ? "default" : "outline"} onClick={() => selectCategory("")}>
           All
         </Button>
         {DOC_CATEGORIES.map((c) => (
-          <Button key={c} size="sm" className="min-h-9" variant={category === c ? "default" : "outline"} onClick={() => setCategory(c)}>
+          <Button key={c} size="sm" className="min-h-9" variant={category === c ? "default" : "outline"} onClick={() => selectCategory(c)}>
             {DOC_CATEGORY_LABELS[c]}
           </Button>
         ))}
