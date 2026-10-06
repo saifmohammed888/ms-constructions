@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
+import { Check, Download, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,6 +48,7 @@ export default function DocumentsPage() {
   const [dragging, setDragging] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const activeUploadCategory = category ? (category as DocCategory) : uploadCategory;
@@ -94,8 +95,8 @@ export default function DocumentsPage() {
       fd.set("file", file);
       fd.set("category", selectedCategory);
       const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+      const data = await readJsonResponse<Doc>(res);
+      if (!res.ok) throw new Error(getErrorMessage(data, "Upload failed"));
       return data as Doc;
   };
 
@@ -153,6 +154,30 @@ export default function DocumentsPage() {
 
   const allDocuments = list.data ?? [];
 
+  const downloadDocument = async (doc: Doc) => {
+    try {
+      setDownloadingId(doc.id);
+      const response = await fetch(`/api/documents/${doc.id}/file?download=1`);
+      if (!response.ok) {
+        const body = await readJsonResponse<{ error?: string }>(response);
+        throw new Error(getErrorMessage(body, "Could not download file"));
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not download file");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const shareDocumentFile = async (doc: Doc) => {
     const shareLink = documentShareLink(doc);
     try {
@@ -199,22 +224,22 @@ export default function DocumentsPage() {
           <Button type="button" variant="outline" className="min-h-11" onClick={() => setBulkOpen((open) => !open)} aria-expanded={bulkOpen}>
             {bulkOpen ? "Hide bulk upload" : "Bulk upload"}
           </Button>
-          <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">
+          <Button type="button" className="min-h-11" onClick={() => inputRef.current?.click()} disabled={uploadState.total > 0 && uploadState.done < uploadState.total}>
             {uploadState.total > 0 && uploadState.done < uploadState.total ? <Spinner /> : <Upload className="size-4" />}
             Upload
-            <input
-              ref={inputRef}
-              type="file"
-              className="hidden"
-              multiple
-              accept="image/*,.pdf,.dwg,.docx,.xlsx,.doc,.xls,application/pdf"
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                if (files.length) void uploadFiles(files);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </Button>
+          <input
+            ref={inputRef}
+            type="file"
+            className="sr-only"
+            multiple
+            accept="image/*,.pdf,.dwg,.docx,.xlsx,.doc,.xls,application/pdf"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length) void uploadFiles(files);
+              e.target.value = "";
+            }}
+          />
         </div>
       </div>
 
@@ -265,7 +290,7 @@ export default function DocumentsPage() {
         ))}
       </div>
 
-      {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} sharingId={sharingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} />}
+      {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} sharingId={sharingId} downloadingId={downloadingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} onDownload={downloadDocument} />}
 
       {list.isLoading ? (
         <CardSkeleton rows={6} />
@@ -290,9 +315,9 @@ export default function DocumentsPage() {
                     Open in Drive
                   </a>
                 )}
-                <a className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm" href={`/api/documents/${preview.id}/file`} download={preview.name}>
-                  Download
-                </a>
+                <Button variant="outline" className="min-h-11" onClick={() => downloadDocument(preview)} disabled={downloadingId === preview.id}>
+                  {downloadingId === preview.id ? <Spinner /> : <Download className="size-4" />} Download
+                </Button>
                 <Button variant="outline" className="min-h-11" onClick={() => shareDocumentFile(preview)} disabled={sharingId === preview.id}>
                   {sharingId === preview.id ? <Spinner /> : <MessageCircle className="size-4" />} Share file
                 </Button>
@@ -342,8 +367,8 @@ export default function DocumentsPage() {
   );
 }
 
-function ImageTable({ items, selected, sharingId, onSelect, onView, onEdit, onAttach, onShare }: { items: Doc[]; selected: Doc | null; sharingId: string | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void; onShare: (doc: Doc) => void }) {
-  return <section className="table-shell" aria-label="Library files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button><Button variant="outline" size="sm" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}Share</Button></div></td></tr>)}</tbody></table></section>;
+function ImageTable({ items, selected, sharingId, downloadingId, onSelect, onView, onEdit, onAttach, onShare, onDownload }: { items: Doc[]; selected: Doc | null; sharingId: string | null; downloadingId: string | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void; onShare: (doc: Doc) => void; onDownload: (doc: Doc) => void }) {
+  return <section className="table-shell" aria-label="Library files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button><Button variant="outline" size="sm" onClick={() => onDownload(doc)} disabled={downloadingId === doc.id} aria-label={`Download ${doc.name}`} title="Download">{downloadingId === doc.id ? <Spinner /> : <Download className="size-3.5" />}Download</Button><Button variant="outline" size="sm" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}Share</Button></div></td></tr>)}</tbody></table></section>;
 }
 
 function documentShareLink(doc: Doc) {
@@ -355,6 +380,20 @@ function documentShareLink(doc: Doc) {
 function whatsappShareUrl(doc: Doc) {
   const text = `MS Construction document: ${doc.name}\n${documentShareLink(doc)}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+async function readJsonResponse<T>(res: Response) {
+  const text = await res.text();
+  if (!text) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return { error: text } as T;
+  }
+}
+
+function getErrorMessage(body: unknown, fallback: string) {
+  return typeof body === "object" && body && "error" in body && typeof body.error === "string" ? body.error : fallback;
 }
 
 function formatBytes(bytes: number) {
