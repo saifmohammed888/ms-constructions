@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarDays,
   ClipboardList,
   FileText,
   Home,
@@ -20,12 +21,13 @@ const NAV = [
   { href: "/", label: "Home", icon: Home },
   { href: "/documents", label: "Library", icon: FileText },
   { href: "/tasks", label: "Work", icon: ClipboardList },
+  { href: "/daily-log", label: "Daily", icon: CalendarDays },
   { href: "/expenses", label: "Money", icon: IndianRupee },
   { href: "/contacts", label: "People", icon: Users },
   { href: "/more", label: "More", icon: MoreHorizontal },
 ];
 
-const MOBILE_NAV = [NAV[0], NAV[2], NAV[3], NAV[1]];
+const MOBILE_NAV = [NAV[0], NAV[2], NAV[3], NAV[4], NAV[1]];
 
 export function AppShell({
   children,
@@ -100,6 +102,7 @@ export function AppShell({
           <div className="grid grid-cols-2 gap-3 px-4">
             <QuickLink href="/expenses" label="Add expense" onClick={() => setQuickAddOpen(false)} />
             <QuickLink href="/tasks" label="Add task" onClick={() => setQuickAddOpen(false)} />
+            <QuickLink href="/daily-log" label="Daily log" onClick={() => setQuickAddOpen(false)} />
             <QuickLink href="/documents" label="Upload document" onClick={() => setQuickAddOpen(false)} />
             <QuickLink href="/documents" label="Add site photo" onClick={() => setQuickAddOpen(false)} />
             <QuickLink href="/contacts" label="People" onClick={() => setQuickAddOpen(false)} />
@@ -107,7 +110,7 @@ export function AppShell({
           </div>
         </SheetContent>
       </Sheet>
-      <nav aria-label="Primary navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-black/5 bg-white/95 backdrop-blur md:hidden">
+      <nav aria-label="Primary navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-black/5 bg-white/95 backdrop-blur md:hidden">
         {MOBILE_NAV.map((item) => {
           const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
           return (

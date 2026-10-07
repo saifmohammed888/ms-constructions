@@ -130,6 +130,16 @@ export const siteUpdates = pgTable("site_updates", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const siteUpdateDocuments = pgTable(
+  "site_update_documents",
+  {
+    siteUpdateId: uuid("site_update_id").notNull().references(() => siteUpdates.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("site_update_documents_pair_idx").on(t.siteUpdateId, t.documentId)],
+);
+
 export const materials = pgTable("materials", {
   id: uuid("id").primaryKey().defaultRandom(),
   projectId: uuid("project_id").notNull(),
@@ -239,6 +249,7 @@ export const schema = {
   settings,
   loginAttempts,
   siteUpdates,
+  siteUpdateDocuments,
   materials,
   snags,
   decisions,
