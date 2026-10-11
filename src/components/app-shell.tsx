@@ -27,7 +27,7 @@ const NAV = [
   { href: "/more", label: "More", icon: MoreHorizontal },
 ];
 
-const MOBILE_NAV = [NAV[0], NAV[2], NAV[3], NAV[4], NAV[1]];
+const MOBILE_NAV = [NAV[0], NAV[2], NAV[4], NAV[5], NAV[1]];
 
 export function AppShell({
   children,
@@ -131,7 +131,7 @@ export function AppShell({
           href="/more"
           className={cn(
             "flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]",
-            path.startsWith("/more") || path.startsWith("/contacts") || path.startsWith("/settings")
+            path.startsWith("/more") || path.startsWith("/settings")
               ? "font-semibold text-foreground"
               : "text-muted-foreground",
           )}
