@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Maximize2, MessageCircle, Minimize2, Send, X } from "lucide-react";
+import { Loader2, Maximize2, MessageCircle, Minimize2, Send, Trash2, X } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,45 @@ type Message = {
   content: string;
   isError?: boolean;
 };
+
+type ViewState = "small" | "half" | "full";
+
+const STORAGE_KEY = "agent-chat-history";
+const MAX_STORED_MESSAGES = 100;
+const VIEW_ORDER: ViewState[] = ["small", "half", "full"];
+
+const VIEW_CLASSES: Record<ViewState, string> = {
+  small: "h-96 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-7rem)]",
+  half: "h-[80vh] w-[500px] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]",
+  full: "inset-4 h-auto w-auto md:inset-10",
+};
+
+const VIEW_LABELS: Record<ViewState, string> = {
+  small: "Expand chat to half screen",
+  half: "Expand chat to full screen",
+  full: "Minimize chat",
+};
+
+function isMessage(value: unknown): value is Message {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<Message>;
+  return (
+    typeof record.id === "string" &&
+    (record.role === "user" || record.role === "assistant") &&
+    typeof record.content === "string"
+  );
+}
+
+function loadHistory(): Message[] {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isMessage) : [];
+  } catch {
+    return [];
+  }
+}
 
 function readAnswer(data: unknown): { content: string; isError: boolean } {
   if (data && typeof data === "object") {
@@ -70,24 +109,54 @@ const markdownComponents: Components = {
 
 export function AgentChat() {
   const [open, setOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [viewState, setViewState] = useState<ViewState>("small");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // localStorage only exists after mount, so hydrate in an effect instead of a
+  // useState initialiser (which would also run during SSR).
+  useEffect(() => {
+    setMessages(loadHistory());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)));
+    } catch {
+      // Quota exceeded or storage disabled — chat still works for this session.
+    }
+  }, [messages, hydrated]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading, open, isExpanded]);
+  }, [messages, loading, open, viewState]);
 
   useEffect(() => {
-    if (!isExpanded) return;
+    if (viewState !== "full") return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsExpanded(false);
+      if (e.key === "Escape") setViewState("small");
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isExpanded]);
+  }, [viewState]);
+
+  function cycleView() {
+    setViewState((current) => VIEW_ORDER[(VIEW_ORDER.indexOf(current) + 1) % VIEW_ORDER.length]);
+  }
+
+  function clearHistory() {
+    setMessages([]);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -122,20 +191,16 @@ export function AgentChat() {
     }
   }
 
+  const isFull = viewState === "full";
+
   return (
-    <div
-      className={cn(
-        "fixed z-50 flex flex-col items-end gap-3",
-        isExpanded && open ? "inset-0" : "right-4 bottom-20 md:right-6 md:bottom-6",
-      )}
-    >
+    <div className={cn("fixed z-50 flex flex-col items-end gap-3", isFull ? "inset-0" : "right-4 bottom-4")}>
       {open && (
         <div
           className={cn(
-            "flex flex-col overflow-hidden border bg-background shadow-xl",
-            isExpanded
-              ? "fixed inset-4 z-50 w-auto rounded-2xl md:inset-10"
-              : "h-[min(32rem,calc(100dvh-9rem))] w-[min(22rem,calc(100vw-2rem))] rounded-2xl",
+            "flex flex-col overflow-hidden rounded-2xl border bg-background shadow-xl",
+            isFull ? "fixed" : "relative",
+            VIEW_CLASSES[viewState],
           )}
         >
           <div className="flex items-center justify-between border-b px-4 py-3">
@@ -148,18 +213,29 @@ export function AgentChat() {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setIsExpanded((v) => !v)}
-                aria-label={isExpanded ? "Minimize chat" : "Expand chat"}
-                aria-pressed={isExpanded}
+                onClick={clearHistory}
+                disabled={messages.length === 0}
+                aria-label="Clear chat history"
+                title="Clear chat history"
+                className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-destructive disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              >
+                <Trash2 className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={cycleView}
+                aria-label={VIEW_LABELS[viewState]}
+                title={VIEW_LABELS[viewState]}
+                aria-pressed={isFull}
                 className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
               >
-                {isExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                {isFull ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  setIsExpanded(false);
+                  setViewState("small");
                 }}
                 aria-label="Close chat"
                 className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -172,7 +248,7 @@ export function AgentChat() {
           <div
             ref={listRef}
             aria-live="polite"
-            className={cn("flex-1 space-y-3 overflow-y-auto px-4 py-3", isExpanded && "mx-auto w-full max-w-3xl")}
+            className={cn("flex-1 space-y-3 overflow-y-auto px-4 py-3", isFull && "mx-auto w-full max-w-3xl")}
           >
             {messages.length === 0 && !loading && (
               <p className="text-sm text-muted-foreground">
@@ -209,7 +285,7 @@ export function AgentChat() {
 
           <form
             onSubmit={submit}
-            className={cn("flex items-center gap-2 border-t p-3", isExpanded && "mx-auto w-full max-w-3xl")}
+            className={cn("flex items-center gap-2 border-t p-3", isFull && "mx-auto w-full max-w-3xl")}
           >
             <input
               value={input}
@@ -231,17 +307,18 @@ export function AgentChat() {
         </div>
       )}
 
-      {!isExpanded && (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? "Close project agent" : "Open project agent"}
-          aria-expanded={open}
-          className="inline-flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
-        >
-          {open ? <X className="size-6" /> : <MessageCircle className="size-6" />}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={open ? "Close project agent" : "Open project agent"}
+        aria-expanded={open}
+        className={cn(
+          "inline-flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90",
+          open && isFull && "absolute right-6 bottom-6",
+        )}
+      >
+        {open ? <X className="size-6" /> : <MessageCircle className="size-6" />}
+      </button>
     </div>
   );
 }
