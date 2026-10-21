@@ -252,8 +252,11 @@ export default function AgentPage() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-8.5rem)] flex-col overflow-hidden rounded-2xl border bg-[#efeae2] md:h-[calc(100dvh-7rem)]">
-      <header className="flex items-center justify-between gap-3 border-b bg-white px-4 py-3">
+    // -mb-24 cancels the shell's <main> bottom padding (pb-24 on mobile / md:pb-10)
+    // so the composer sits flush above the keyboard / bottom nav instead of
+    // floating above it.
+    <div className="relative -mb-24 flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden rounded-2xl border border-black/5 bg-[#efeae2] md:-mb-10">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
             AI
@@ -281,7 +284,7 @@ export default function AgentPage() {
       <div
         ref={scrollRef}
         aria-live="polite"
-        className="flex-1 space-y-2 overflow-y-auto px-3 py-4 md:px-6"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-4 md:px-6"
       >
         {messages.length === 0 && !pending && !loading && (
           <div className="mx-auto mt-6 max-w-sm rounded-xl bg-white/80 px-4 py-3 text-center text-sm text-muted-foreground shadow-sm">
@@ -338,10 +341,13 @@ export default function AgentPage() {
       </div>
 
       {error && (
-        <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>
+        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>
       )}
 
-      <form onSubmit={send} className="flex items-end gap-2 border-t bg-white px-3 py-2.5 md:px-4">
+      <form
+        onSubmit={send}
+        className="flex shrink-0 items-end gap-2 border-t bg-white px-3 py-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:px-4"
+      >
         <textarea
           ref={inputRef}
           value={input}
