@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText, stepCountIs, tool } from "ai";
-import { gateway } from "@ai-sdk/gateway";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
@@ -8,6 +8,8 @@ import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY });
 
 const MAX_QUERY_LENGTH = 4000;
 const DEFAULT_ROW_LIMIT = 100;
@@ -125,10 +127,6 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    if (!process.env.AI_GATEWAY_API_KEY) {
-      return NextResponse.json({ error: "Agent is not configured. Add AI_GATEWAY_API_KEY." }, { status: 503 });
-    }
-
     const body = (await req.json().catch(() => null)) as { question?: string; messages?: unknown } | null;
     const question = body?.question?.trim();
     const messages = Array.isArray(body?.messages)
@@ -143,7 +141,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await generateText({
-      model: gateway(process.env.PROJECT_AI_MODEL || "deepseek/deepseek-chat"),
+      model: deepseek("deepseek-chat"),
       system:
         "You are a read-only construction project assistant. Answer in 2-6 short sentences or bullets. " +
         "Query the database with the query_project_data tool for every factual claim. " +
