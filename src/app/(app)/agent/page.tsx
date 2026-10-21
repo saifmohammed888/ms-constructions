@@ -252,10 +252,10 @@ export default function AgentPage() {
   }
 
   return (
-    // -mb-24 cancels the shell's <main> bottom padding (pb-24 on mobile / md:pb-10)
-    // so the composer sits flush above the keyboard / bottom nav instead of
-    // floating above it.
-    <div className="relative -mb-24 flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden rounded-2xl border border-black/5 bg-[#efeae2] md:-mb-10">
+    // The composer is a normal flex child (never fixed/absolute), so it stays
+    // pinned above the keyboard as the viewport shrinks. `overflow-hidden` keeps
+    // the page itself from scrolling; only the message list scrolls.
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
@@ -284,7 +284,7 @@ export default function AgentPage() {
       <div
         ref={scrollRef}
         aria-live="polite"
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-4 md:px-6"
+        className="flex-1 space-y-2 overflow-y-auto overscroll-contain p-4"
       >
         {messages.length === 0 && !pending && !loading && (
           <div className="mx-auto mt-6 max-w-sm rounded-xl bg-white/80 px-4 py-3 text-center text-sm text-muted-foreground shadow-sm">
@@ -340,40 +340,41 @@ export default function AgentPage() {
         )}
       </div>
 
-      {error && (
-        <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>
-      )}
+      <div className="shrink-0 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        {error && (
+          <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </div>
+        )}
 
-      <form
-        onSubmit={send}
-        className="flex shrink-0 items-end gap-2 border-t bg-white px-3 py-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] md:px-4"
-      >
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void send(e);
-            }
-          }}
-          rows={1}
-          maxLength={500}
-          disabled={loading}
-          placeholder="Type a message…"
-          aria-label="Message the project agent"
-          className="max-h-36 min-h-10 flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          aria-label="Send message"
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-700 disabled:opacity-40"
-        >
-          {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-5" />}
-        </button>
-      </form>
+        <form onSubmit={send} className="relative flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send(e);
+              }
+            }}
+            rows={1}
+            maxLength={500}
+            disabled={loading}
+            placeholder="Type a message…"
+            aria-label="Message the project agent"
+            className="max-h-36 min-h-10 flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            aria-label="Send message"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-700 disabled:opacity-40"
+          >
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-5" />}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
