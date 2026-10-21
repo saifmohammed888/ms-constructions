@@ -7,7 +7,21 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  isError?: boolean;
 };
+
+function readAnswer(data: unknown): { content: string; isError: boolean } {
+  if (data && typeof data === "object") {
+    const record = data as { answer?: unknown; error?: unknown };
+    if (typeof record.answer === "string" && record.answer.trim()) {
+      return { content: record.answer.trim(), isError: false };
+    }
+    if (typeof record.error === "string" && record.error.trim()) {
+      return { content: record.error.trim(), isError: true };
+    }
+  }
+  return { content: typeof data === "string" ? data : "No answer returned.", isError: true };
+}
 
 export function AgentChat() {
   const [open, setOpen] = useState(false);
@@ -36,17 +50,16 @@ export function AgentChat() {
         body: JSON.stringify({ question }),
       });
       const data: unknown = await res.json().catch(() => null);
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "assistant", content: JSON.stringify(data, null, 2) },
-      ]);
+      const { content, isError } = readAnswer(data);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content, isError }]);
     } catch (error) {
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: JSON.stringify({ error: error instanceof Error ? error.message : "Request failed" }, null, 2),
+          content: error instanceof Error ? error.message : "Request failed",
+          isError: true,
         },
       ]);
     } finally {
@@ -55,11 +68,16 @@ export function AgentChat() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div className="fixed right-4 bottom-20 z-50 flex flex-col items-end gap-3 md:right-6 md:bottom-6">
       {open && (
-        <div className="flex h-[min(32rem,calc(100vh-8rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border bg-background shadow-xl">
+        <div className="flex h-[min(32rem,calc(100dvh-9rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border bg-background shadow-xl">
           <div className="flex items-center justify-between border-b px-4 py-3">
-            <h2 className="text-sm font-semibold">Project Agent</h2>
+            <div className="flex items-center gap-2">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
+                AI
+              </span>
+              <h2 className="text-sm font-semibold">Project Agent</h2>
+            </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -70,21 +88,25 @@ export function AgentChat() {
             </button>
           </div>
 
-          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+          <div ref={listRef} aria-live="polite" className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
             {messages.length === 0 && !loading && (
-              <p className="text-sm text-muted-foreground">Ask about projects, expenses, contacts, tasks, or documents.</p>
+              <p className="text-sm text-muted-foreground">
+                Ask about projects, expenses, contacts, tasks, or documents.
+              </p>
             )}
             {messages.map((m) => (
               <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                <pre
-                  className={`max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3 py-2 font-sans text-sm ${
+                <div
+                  className={`max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-sm ${
                     m.role === "user"
                       ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
+                      : m.isError
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-muted text-foreground"
                   }`}
                 >
                   {m.content}
-                </pre>
+                </div>
               </div>
             ))}
             {loading && (
@@ -100,6 +122,7 @@ export function AgentChat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question…"
+              aria-label="Question for the project agent"
               disabled={loading}
               className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             />

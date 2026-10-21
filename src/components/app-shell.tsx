@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { AgentChat } from "@/components/agent-chat";
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -140,6 +141,7 @@ export function AppShell({
           More
         </Link>
       </nav>
+      <AgentChat />
     </div>
   );
 }
