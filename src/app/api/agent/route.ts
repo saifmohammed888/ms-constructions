@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText, stepCountIs, tool } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { sql } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
+import { agentMessages, projects } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -15,6 +16,8 @@ const MAX_QUERY_LENGTH = 4000;
 const DEFAULT_ROW_LIMIT = 100;
 const MAX_ROW_LIMIT = 200;
 const QUERY_TIMEOUT_MS = 10_000;
+const HISTORY_LIMIT = 300;
+const CONTEXT_MESSAGES = 12;
 
 // Statements that can mutate data or objects. Anything else (INSERT, UPDATE,
 // DELETE, DDL, CALL, COPY, GRANT, ...) is also rejected because the statement
@@ -122,23 +125,85 @@ const queryProjectData = tool({
   },
 });
 
+async function defaultProjectId() {
+  const db = await getDb();
+  const [project] = await db.select({ id: projects.id }).from(projects).limit(1);
+  return project?.id ?? null;
+}
+
+export async function GET() {
+  if (!(await getSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const db = await getDb();
+    const rows = await db
+      .select()
+      .from(agentMessages)
+      .orderBy(asc(agentMessages.createdAt))
+      .limit(HISTORY_LIMIT);
+
+    return NextResponse.json({
+      messages: rows.map((row) => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        isError: row.isError,
+        createdAt: row.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Agent history failed", error);
+    return NextResponse.json({ error: "Could not load chat history" }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  if (!(await getSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const db = await getDb();
+    await db.delete(agentMessages);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Agent history clear failed", error);
+    return NextResponse.json({ error: "Could not clear chat history" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  try {
-    const body = (await req.json().catch(() => null)) as { question?: string; messages?: unknown } | null;
-    const question = body?.question?.trim();
-    const messages = Array.isArray(body?.messages)
-      ? (body.messages as Parameters<typeof generateText>[0]["messages"])
-      : null;
+  const body = (await req.json().catch(() => null)) as { question?: unknown; messages?: unknown } | null;
+  const question = typeof body?.question === "string" ? body.question.trim() : "";
 
-    if (!question && !messages) {
-      return NextResponse.json({ error: "A question or messages are required." }, { status: 400 });
-    }
-    if (question && question.length > 500) {
-      return NextResponse.json({ error: "Ask a shorter question (max 500 characters)." }, { status: 400 });
-    }
+  if (!question) {
+    return NextResponse.json({ error: "A question is required." }, { status: 400 });
+  }
+  if (question.length > 500) {
+    return NextResponse.json({ error: "Ask a shorter question (max 500 characters)." }, { status: 400 });
+  }
+
+  const db = await getDb();
+  const projectId = await defaultProjectId();
+
+  // Persist the user's message first so it survives a provider failure.
+  const [userRow] = await db
+    .insert(agentMessages)
+    .values({ projectId, role: "user", content: question })
+    .returning();
+
+  try {
+    const history = await db
+      .select({ role: agentMessages.role, content: agentMessages.content })
+      .from(agentMessages)
+      .orderBy(asc(agentMessages.createdAt))
+      .limit(HISTORY_LIMIT);
+
+    const context = history
+      .slice(-CONTEXT_MESSAGES)
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     const result = await generateText({
       model: deepseek("deepseek-chat"),
@@ -147,20 +212,69 @@ export async function POST(req: NextRequest) {
         "Query the database with the query_project_data tool for every factual claim. " +
         "The database is read-only: you cannot insert, update, or delete anything. " +
         "If data is missing or a query fails, say so plainly instead of guessing.",
-      ...(messages ? { messages } : { prompt: question! }),
+      messages: context.length > 0 ? context : [{ role: "user", content: question }],
       tools: { query_project_data: queryProjectData },
       stopWhen: stepCountIs(5),
       temperature: 0.1,
       maxOutputTokens: 600,
     });
 
-    return NextResponse.json({ answer: result.text });
+    const [assistantRow] = await db
+      .insert(agentMessages)
+      .values({ projectId, role: "assistant", content: result.text, isError: false })
+      .returning();
+
+    return NextResponse.json({
+      userMessage: {
+        id: userRow.id,
+        role: userRow.role,
+        content: userRow.content,
+        isError: userRow.isError,
+        createdAt: userRow.createdAt,
+      },
+      message: {
+        id: assistantRow.id,
+        role: assistantRow.role,
+        content: assistantRow.content,
+        isError: assistantRow.isError,
+        createdAt: assistantRow.createdAt,
+      },
+      answer: result.text,
+    });
   } catch (error) {
     console.error("Agent request failed", error);
     const detail =
       error instanceof Error
         ? error.message.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 240)
         : "Unknown provider error";
-    return NextResponse.json({ error: `Agent request failed: ${detail}` }, { status: 502 });
+
+    const [errorRow] = await db
+      .insert(agentMessages)
+      .values({ projectId, role: "assistant", content: `Agent request failed: ${detail}`, isError: true })
+      .returning()
+      .catch(() => []);
+
+    return NextResponse.json(
+      {
+        error: `Agent request failed: ${detail}`,
+        userMessage: {
+          id: userRow.id,
+          role: userRow.role,
+          content: userRow.content,
+          isError: userRow.isError,
+          createdAt: userRow.createdAt,
+        },
+        message: errorRow
+          ? {
+              id: errorRow.id,
+              role: errorRow.role,
+              content: errorRow.content,
+              isError: errorRow.isError,
+              createdAt: errorRow.createdAt,
+            }
+          : null,
+      },
+      { status: 502 },
+    );
   }
 }

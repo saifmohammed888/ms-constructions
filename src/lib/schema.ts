@@ -240,6 +240,19 @@ export const projectTrackers = pgTable("project_trackers", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const agentMessages = pgTable(
+  "agent_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id"),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    isError: boolean("is_error").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("agent_messages_created_at_idx").on(table.createdAt)],
+);
+
 export const schema = {
   projects,
   contacts,
@@ -256,4 +269,5 @@ export const schema = {
   approvals,
   drawingRevisions,
   projectTrackers,
+  agentMessages,
 };

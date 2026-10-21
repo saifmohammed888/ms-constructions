@@ -12,11 +12,11 @@ import {
   MoreHorizontal,
   Plus,
   Settings,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { AgentChat } from "@/components/agent-chat";
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -25,10 +25,11 @@ const NAV = [
   { href: "/daily-log", label: "Daily", icon: CalendarDays },
   { href: "/expenses", label: "Money", icon: IndianRupee },
   { href: "/contacts", label: "People", icon: Users },
+  { href: "/agent", label: "Agent", icon: Sparkles },
   { href: "/more", label: "More", icon: MoreHorizontal },
 ];
 
-const MOBILE_NAV = [NAV[0], NAV[2], NAV[4], NAV[5], NAV[1]];
+const MOBILE_NAV = [NAV[0], NAV[2], NAV[4], NAV[5], NAV[6]];
 
 export function AppShell({
   children,
@@ -141,7 +142,6 @@ export function AppShell({
           More
         </Link>
       </nav>
-      <AgentChat />
     </div>
   );
 }
