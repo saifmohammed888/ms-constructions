@@ -1,5 +1,6 @@
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { attachDatabasePool } from "@vercel/functions";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { eq } from "drizzle-orm";
 import { schema, settings } from "@/lib/schema";
 
@@ -7,6 +8,15 @@ type AppDb = ReturnType<typeof drizzlePg<typeof schema>>;
 
 let cached: AppDb | null = null;
 let ready = false;
+
+// Keep one pool per warm Fluid Compute instance. Vercel closes idle connections
+// safely after each invocation through attachDatabasePool.
+const databaseConnectionString = databaseUrl();
+const pool = databaseConnectionString ? new Pool({ connectionString: databaseConnectionString }) : null;
+
+if (pool) {
+  attachDatabasePool(pool);
+}
 
 const DDL = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -116,11 +126,7 @@ CREATE INDEX IF NOT EXISTS documents_uploaded_at_idx ON documents (uploaded_at D
 `;
 
 export function databaseUrl() {
-  const raw =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_PRISMA_URL ||
-    process.env.ms_DATABASE_URL;
+  const raw = process.env.DATABASE_URL;
   if (!raw) return "";
   const u = new URL(raw);
   u.searchParams.delete("channel_binding");
@@ -143,17 +149,11 @@ async function applyDdl(exec: (sql: string) => Promise<unknown>) {
 export async function getDb(): Promise<AppDb> {
   if (cached && ready) return cached;
 
-  const url = databaseUrl();
+  const url = databaseConnectionString;
   if (url) {
-    const client = postgres(url, {
-      max: 1,
-      prepare: false,
-      ssl: "require",
-      idle_timeout: 20,
-      connect_timeout: 15,
-    });
-    cached = drizzlePg(client, { schema });
-    await applyDdl((s) => client.unsafe(s));
+    if (!pool) throw new Error("Database pool is unavailable");
+    cached = drizzlePg(pool, { schema });
+    await applyDdl((s) => pool.query(s));
   } else if (process.env.VERCEL) {
     throw new Error("DATABASE_URL is missing on Vercel");
   } else {
