@@ -80,6 +80,87 @@ function guardReadOnlySql(raw: string): SqlGuardResult {
   return { ok: true, query };
 }
 
+// ---------------------------------------------------------------------------
+// Write guard
+//
+// Delete is never allowed: not as a statement, and not as an FK action
+// (`ON DELETE CASCADE` would let an innocent-looking INSERT wipe rows).
+// Anything that is not explicitly INSERT/UPDATE/SELECT is refused, so the tool
+// can add tasks or fix an expense but can never remove or reshape data.
+// ---------------------------------------------------------------------------
+
+const WRITE_FORBIDDEN = /\b(delete|drop|truncate|alter)\b/i;
+
+// `ON DELETE CASCADE` is a cascading delete, so it is refused even inside a
+// string literal or comment. Plain prose mentions of deleting ("mark the slab
+// delete as done") cannot cascade anything, so only that phrase is checked in
+// literals — everything else is checked on literal-free SQL.
+const WRITE_FORBIDDEN_IN_LITERAL = /\bon\s+delete\b/i;
+
+// Functions an UPDATE could use to delete or truncate rows indirectly.
+const WRITE_FORBIDDEN_FUNCTIONS =
+  /\b(pg_terminate_backend|pg_cancel_backend|pg_sleep|pg_sleep_for|pg_sleep_until|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_import|lo_export|lo_unlink|dblink|dblink_exec|set_config|nextval|setval)\s*\(/i;
+
+// Copy/bulk-load and session/transaction control have no place in a single
+// agent statement.
+const WRITE_FORBIDDEN_KEYWORDS =
+  /\b(copy|grant|revoke|vacuum|cluster|reindex|refresh|begin|commit|rollback|savepoint|release|listen|notify|lock)\b/i;
+
+// Tables the agent must never write to, whatever statement it uses.
+const PROTECTED_TABLES = /\b(agent_messages|login_attempts|settings)\b/i;
+
+// `WHERE` in a way that a statement could put in a string or comment is not
+// one; stripSqlNoise already removed literals/comments when this is checked.
+// `RETURNING ... WHERE` (old and new) counts, since that is a filter too.
+const UPDATE_HAS_WHERE = /^\s*update\b[\s\S]*\bwhere\b/i;
+
+function guardWriteSql(raw: string): SqlGuardResult {
+  const query = raw.trim().replace(/;\s*$/, "").trim();
+
+  if (!query) return { ok: false, error: "Query is empty." };
+  if (query.length > MAX_QUERY_LENGTH) {
+    return { ok: false, error: `Query is too long (max ${MAX_QUERY_LENGTH} characters).` };
+  }
+  if (/;\s*\S/.test(query)) return { ok: false, error: "Only a single statement is allowed." };
+
+  const cleaned = stripSqlNoise(query);
+
+  if (WRITE_FORBIDDEN.test(cleaned)) {
+    return { ok: false, error: "Deleting data is not allowed. DELETE, DROP, TRUNCATE and ALTER are blocked." };
+  }
+  // stripSqlNoise also blanks comments, so this pass looks for a delete hidden
+  // in a comment such as `-- delete rows` without flagging normal sentence text.
+  if (WRITE_FORBIDDEN_IN_LITERAL.test(query) || WRITE_FORBIDDEN.test(query.replace(/'(?:[^']|'')*'/g, "''"))) {
+    return { ok: false, error: "Deleting data is not allowed." };
+  }
+  if (WRITE_FORBIDDEN_FUNCTIONS.test(cleaned)) {
+    return { ok: false, error: "Query uses a function that is not allowed." };
+  }
+  if (WRITE_FORBIDDEN_KEYWORDS.test(cleaned)) {
+    return { ok: false, error: "Query contains a statement that is not allowed." };
+  }
+  if (PROTECTED_TABLES.test(cleaned)) {
+    return { ok: false, error: "Agent history, settings, and login data are not writable." };
+  }
+
+  const statement = cleaned.trim();
+  const isSelect = /^select\b/i.test(statement);
+  const isInsert = /^insert\s+into\b/i.test(statement);
+  const isUpdate = /^update\b/i.test(statement);
+
+  if (!isSelect && !isInsert && !isUpdate) {
+    return {
+      ok: false,
+      error: "Only SELECT, INSERT INTO, and UPDATE statements are allowed.",
+    };
+  }
+  if (isUpdate && !UPDATE_HAS_WHERE.test(statement)) {
+    return { ok: false, error: "An UPDATE must include a WHERE clause." };
+  }
+
+  return { ok: true, query };
+}
+
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -134,6 +215,49 @@ const queryProjectData = tool({
       };
     } catch (error) {
       return { error: error instanceof Error ? error.message : "Query failed" };
+    }
+  },
+});
+
+const executeWriteQuery = tool({
+  description:
+    "Run a single INSERT or UPDATE statement (with a WHERE clause) to change project records, e.g. add a task or correct an expense. Deleting is never allowed. Returns the number of affected rows.",
+  inputSchema: z.object({
+    queryString: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_QUERY_LENGTH)
+      .describe(
+        "One PostgreSQL INSERT INTO or UPDATE ... WHERE statement, ending with `RETURNING id` so the changed row can be reported back. DELETE, DROP, TRUNCATE, ALTER, and multiple statements are rejected.",
+      ),
+  }),
+  execute: async ({ queryString }) => {
+    let guarded: SqlGuardResult;
+    try {
+      guarded = guardWriteSql(queryString);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Query rejected" };
+    }
+    if (!guarded.ok) return { success: false, error: guarded.error };
+
+    try {
+      const db = await getDb();
+      const result = await withTimeout(db.execute(sql.raw(guarded.query)), QUERY_TIMEOUT_MS);
+      const rows = Array.isArray(result) ? result : [];
+      const rowCount = rows.length > 0 ? rows.length : ((result as { rowCount?: number }).rowCount ?? 0);
+
+      return {
+        success: true,
+        message: rowCount === 1 ? "Record updated" : `${rowCount} records updated`,
+        rowCount,
+        rows: rows.slice(0, 20),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Write query failed",
+      };
     }
   },
 });
@@ -221,12 +345,18 @@ export async function POST(req: NextRequest) {
     const result = await generateText({
       model: deepseek("deepseek-chat"),
       system:
-        "You are a read-only construction project assistant. Answer in 2-6 short sentences or bullets. " +
-        "Query the database with the query_project_data tool for every factual claim. " +
-        "The database is read-only: you cannot insert, update, or delete anything. " +
+        "You have read access via query_project_data and write access via execute_write_query. " +
+        "You can add tasks, update expenses, or modify records. NEVER attempt to delete data. " +
+        "When a user asks you to make a change, use the write tool and then confirm to the user what you did. " +
+        "Answer in 2-6 short sentences or bullets. Query the database with query_project_data for every " +
+        "factual claim, and look up the real row ids before writing. UPDATE statements must include a " +
+        "WHERE clause, and never write to agent_messages, settings, or login_attempts. " +
         "If data is missing or a query fails, say so plainly instead of guessing.",
       messages: context.length > 0 ? context : [{ role: "user", content: question }],
-      tools: { query_project_data: queryProjectData },
+      tools: {
+        query_project_data: queryProjectData,
+        execute_write_query: executeWriteQuery,
+      },
       stopWhen: stepCountIs(5),
       temperature: 0.1,
       // Tool calls and the final answer share this budget; too small a value

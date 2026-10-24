@@ -9,11 +9,13 @@ type AppDb = ReturnType<typeof drizzlePg<typeof schema>>;
 let cached: AppDb | null = null;
 let ready = false;
 
-// Keep one pool per warm Fluid Compute instance. Vercel closes idle connections
-// safely after each invocation through attachDatabasePool.
+// Prefer the dedicated writer endpoint (it can reach the primary directly, so
+// the agent's write tool always sees fresh rows) and fall back to DATABASE_URL.
 const databaseConnectionString = databaseUrl();
 const pool = databaseConnectionString ? new Pool({ connectionString: databaseConnectionString }) : null;
 
+// Keep one pool per warm Fluid Compute instance. Vercel closes idle connections
+// safely after each invocation through attachDatabasePool.
 if (pool) {
   attachDatabasePool(pool);
 }
@@ -128,12 +130,18 @@ CREATE INDEX IF NOT EXISTS documents_uploaded_at_idx ON documents (uploaded_at D
 `;
 
 export function databaseUrl() {
-  const raw = process.env.DATABASE_URL;
+  // A dedicated writer/pooled primary endpoint wins over the generic URL.
+  const raw = process.env.DATABASE_URL_WRITER || process.env.DATABASE_URL;
   if (!raw) return "";
-  const u = new URL(raw);
-  u.searchParams.delete("channel_binding");
-  if (!u.searchParams.get("sslmode")) u.searchParams.set("sslmode", "require");
-  return u.toString();
+  try {
+    const u = new URL(raw);
+    u.searchParams.delete("channel_binding");
+    if (!u.searchParams.get("sslmode")) u.searchParams.set("sslmode", "require");
+    return u.toString();
+  } catch {
+    // Malformed URL: use the raw string and let the driver report the details.
+    return raw;
+  }
 }
 
 async function applyDdl(exec: (sql: string) => Promise<unknown>) {
@@ -157,7 +165,7 @@ export async function getDb(): Promise<AppDb> {
     cached = drizzlePg(pool, { schema });
     await applyDdl((s) => pool.query(s));
   } else if (process.env.VERCEL) {
-    throw new Error("DATABASE_URL is missing on Vercel");
+    throw new Error("DATABASE_URL_WRITER / DATABASE_URL is missing on Vercel");
   } else {
     const { PGlite } = await import("@electric-sql/pglite");
     const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
