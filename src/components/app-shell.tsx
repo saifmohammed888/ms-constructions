@@ -19,7 +19,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/documents", label: "Documents", icon: FileText },
+  { href: "/documents", label: "Docs", icon: FileText },
   // The old "Work" (tasks) tab is hidden; its tasks are reachable from the
   // dashboard, and day-to-day site work lives in the Work Log below.
   { href: "/daily-log", label: "Work Log", icon: CalendarDays },
@@ -29,8 +29,10 @@ const NAV = [
   { href: "/more", label: "More", icon: MoreHorizontal },
 ];
 
-// Six tabs fill the mobile bar 1:1; "More" is rendered separately below.
-const MOBILE_NAV = NAV.filter((item) => item.href !== "/more" && item.href !== "/agent");
+// Mobile bar: every primary tab including Agent, which has no "More" entry and
+// is only reachable from here. Only "More" is rendered separately below, so it
+// stays highlighted for /more and /settings.
+const MOBILE_NAV = NAV.filter((item) => item.href !== "/more");
 
 export function AppShell({
   children,
@@ -46,7 +48,9 @@ export function AppShell({
   // edge, like a native messaging app).
   const immersive = path.startsWith("/agent");
   return (
-    <div className="min-h-dvh bg-background text-foreground">
+    // On the chat route the shell is a locked viewport-height box so the inner
+    // pane can size itself exactly and only the message list scrolls.
+    <div className={cn("bg-background text-foreground", immersive ? "h-dvh overflow-hidden" : "min-h-dvh")}>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-white p-5 md:flex md:flex-col">
         <div className="mb-8 px-2">
           <div className="flex items-center gap-2">
@@ -87,8 +91,8 @@ export function AppShell({
         </Link>
       </aside>
 
-      <div className="md:pl-64">
-        <header className={cn("sticky top-0 z-20 min-h-14 items-center justify-between border-b border-black/5 bg-background/90 px-4 py-3 backdrop-blur md:px-8 md:flex", immersive ? "hidden" : "flex")}>
+      <div className={immersive ? "h-dvh md:flex md:flex-col md:pl-64" : "md:pl-64"}>
+        <header className={cn("sticky top-0 z-20 min-h-14 shrink-0 items-center justify-between border-b border-black/5 bg-background/90 px-4 py-3 backdrop-blur md:px-8 md:flex", immersive ? "hidden" : "flex")}>
           <div>
             <p className="text-sm font-semibold md:hidden">{projectName}</p>
             <p className="hidden text-sm text-muted-foreground md:block">Your construction, in one calm place</p>
@@ -97,7 +101,13 @@ export function AppShell({
             <Settings className="size-5" />
           </Link>
         </header>
-        <main className={immersive ? "pb-0 pt-0 md:px-8 md:pb-10 md:pt-5" : "px-4 pb-24 pt-5 md:px-8 md:pb-10"}>{children}</main>
+        {/* On the agent route this pane is the viewport-height flex parent the
+            chat fills with `h-full`, so the composer sits flush at the bottom
+            (above the mobile keyboard) instead of at the end of a long page.
+            The mobile sticky header is hidden there, so the pane is `h-dvh`;
+            on desktop it is `flex-1` and takes whatever the header leaves over,
+            whatever the header's actual height is (name wrapping included). */}
+        <main className={immersive ? "flex h-dvh min-h-0 flex-col overflow-hidden md:h-auto md:flex-1 md:px-8 md:pb-10 md:pt-5" : "px-4 pb-24 pt-5 md:px-8 md:pb-10"}>{children}</main>
       </div>
 
       {!immersive && (
@@ -120,34 +130,35 @@ export function AppShell({
           </Sheet>
         </>
       )}
-      <nav aria-label="Primary navigation" className={cn("fixed inset-x-0 bottom-0 z-30 border-t border-black/5 bg-white/95 backdrop-blur md:hidden", immersive ? "hidden" : "grid grid-cols-6")}>
+      <nav aria-label="Primary navigation" className={cn("fixed inset-x-0 bottom-0 z-30 border-t border-black/5 bg-white/95 backdrop-blur md:hidden", immersive ? "hidden" : "grid")} style={{ gridTemplateColumns: `repeat(${MOBILE_NAV.length + 1}, minmax(0, 1fr))` }}>
         {MOBILE_NAV.map((item) => {
           const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]",
+                "flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[10px] leading-tight",
                 active ? "font-semibold text-foreground" : "text-muted-foreground",
               )}
             >
-              <item.icon className="size-5" />
-              {item.label}
+              <item.icon className="size-5 shrink-0" />
+              <span className="max-w-full truncate">{item.label}</span>
             </Link>
           );
         })}
         <Link
           href="/more"
           className={cn(
-            "flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]",
+            "flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[10px] leading-tight",
             path.startsWith("/more") || path.startsWith("/settings")
               ? "font-semibold text-foreground"
               : "text-muted-foreground",
           )}
         >
-          <MoreHorizontal className="size-5" />
-          More
+          <MoreHorizontal className="size-5 shrink-0" />
+          <span className="max-w-full truncate">More</span>
         </Link>
       </nav>
     </div>

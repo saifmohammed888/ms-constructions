@@ -163,6 +163,18 @@ export default function AgentPage() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
 
+  // Jump (no animation) to the newest message right after mount — e.g. the
+  // stored thread is rehydrated and should open at the latest exchange.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    const frame = requestAnimationFrame(() => {
+      const list = scrollRef.current;
+      if (list) list.scrollTop = list.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   // Persist the thread whenever it changes (only after hydration has seeded it,
   // so the first effect doesn't overwrite saved history with an empty list).
   useEffect(() => {
@@ -313,13 +325,13 @@ export default function AgentPage() {
   }
 
   return (
-    // Full-height flex column so the composer is always the last visible row.
-    // - `h-[100dvh]` tracks the mobile keyboard / browser chrome (no page scroll).
-    // - `overflow-hidden` on the page; only the message list scrolls.
-    // - On mobile the composer is a normal flex child (so it rides above the
-    //   keyboard), and on desktop it stays anchored to the bottom of the pane.
-    // - The app shell drops its chrome on this route, so nothing overlaps it.
-    <div className="flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-background">
+    // Fills the shell's chat pane (`h-dvh` flex column) with `h-full`, so no
+    // matter how tall the desktop header/padding are, the composer is the last
+    // visible row and the page itself never scrolls.
+    // - Only the message list scrolls (`min-h-0 flex-1 overflow-y-auto`).
+    // - `shrink-0` pins the composer to the bottom, above the mobile keyboard.
+    // - The shell drops its chrome on this route on mobile, so nothing overlaps.
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:pt-3">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">

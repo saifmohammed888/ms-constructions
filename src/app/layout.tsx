@@ -8,8 +8,8 @@ export const metadata: Metadata = {
 };
 
 // resizes-content makes browsers shrink the layout viewport when the on-screen
-// keyboard opens, so `100dvh` screens (e.g. the agent chat) stay flush above it
-// instead of being covered.
+// keyboard opens, so viewport-height screens (e.g. the agent chat) stay flush
+// above it instead of being covered.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -18,8 +18,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    // `h-full` gives descendants a real height to size against (the agent chat
+    // uses `h-full`), while the page itself still scrolls normally elsewhere.
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">
+      <body className="h-full">
         <Providers>{children}</Providers>
       </body>
     </html>
