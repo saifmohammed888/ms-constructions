@@ -20,6 +20,13 @@ type PendingMessage = {
 
 const STORAGE_KEY = "agent-chat-history";
 const MAX_STORED_MESSAGES = 300;
+const EMPTY_REPLY_FALLBACK = "No answer came back from the agent. Please try asking again.";
+
+/** Trim AI output and never render/persist a blank bubble. */
+function normalizeMessage<T extends ChatMessage>(message: T): T {
+  const content = (message.content ?? "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  return { ...message, content: content.length > 0 ? content : EMPTY_REPLY_FALLBACK };
+}
 
 function isChatMessage(value: unknown): value is ChatMessage {
   if (!value || typeof value !== "object") return false;
@@ -49,6 +56,12 @@ function normalizeContent(content: string) {
   return content.replace(/\s+/g, " ").trim();
 }
 
+/** Append rows, skipping ids already present (the history GET can race a send). */
+function appendUnique(prev: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
+  const seen = new Set(prev.map((m) => m.id));
+  return [...prev, ...next.filter((m) => !seen.has(m.id))].slice(-MAX_STORED_MESSAGES);
+}
+
 function isStorageReady() {
   return typeof window !== "undefined" && Boolean(window.localStorage);
 }
@@ -60,7 +73,10 @@ function loadStoredHistory(): ChatMessage[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isChatMessage).slice(-MAX_STORED_MESSAGES);
+    const messages = parsed.filter(isChatMessage).slice(-MAX_STORED_MESSAGES);
+    if (messages.length === 0) return [];
+    // Older versions could save blank assistant rows; heal them on load.
+    return messages.map(normalizeMessage);
   } catch {
     // Corrupt or unavailable storage — start with an empty thread.
     return [];
@@ -130,7 +146,10 @@ function formatTime(value?: string) {
 }
 
 export default function AgentPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadStoredHistory());
+  // Always start empty so the server HTML and the first client render match;
+  // stored history is loaded in the effect below (runs once, after hydration).
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [pending, setPending] = useState<PendingMessage | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -144,31 +163,42 @@ export default function AgentPage() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
 
-  // Persist the thread whenever it changes.
+  // Persist the thread whenever it changes (only after hydration has seeded it,
+  // so the first effect doesn't overwrite saved history with an empty list).
   useEffect(() => {
-    if (!isStorageReady()) return;
+    if (!historyLoaded || !isStorageReady()) return;
     saveStoredHistory(messages);
-  }, [messages]);
+  }, [historyLoaded, messages]);
 
-  // Reconcile with the server copy on mount. localStorage paints instantly from
-  // the useState initialiser above; this only upgrades it to DB-backed rows.
+  // Seed from localStorage, then reconcile with the server copy. Doing this
+  // after mount (instead of in a useState initialiser) keeps SSR output equal to
+  // the first client render, so React doesn't report a hydration mismatch.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    const local = loadStoredHistory();
+    const serverCopy = (async () => {
       try {
         const res = await fetch("/api/agent", { cache: "no-store" });
         const data = await res.json().catch(() => null);
-        if (cancelled) return;
         if (!res.ok) {
-          // Server history unavailable; whatever came from localStorage stays.
-          return;
+          // Server history unavailable; the localStorage thread stays.
+          return local;
         }
-        const serverMessages = Array.isArray(data?.messages) ? data.messages.filter(isChatMessage) : [];
-        setMessages((local) => mergeHistory(local, serverMessages));
+        const serverMessages = Array.isArray(data?.messages)
+          ? data.messages.filter(isChatMessage).map(normalizeMessage)
+          : [];
+        return mergeHistory(local, serverMessages);
       } catch {
-        if (!cancelled) setError("Could not load chat history");
+        setError("Could not load chat history");
+        return local;
       }
     })();
+
+    let cancelled = false;
+    void serverCopy.then((merged) => {
+      if (cancelled) return;
+      setMessages(merged);
+      setHistoryLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
@@ -205,23 +235,54 @@ export default function AgentPage() {
       });
       const data = await res.json().catch(() => null);
 
-      // Replace the optimistic bubble with the persisted user row (if present).
-      if (data?.userMessage) {
-        setMessages((prev) => [...prev, data.userMessage as ChatMessage]);
-      } else {
-        setMessages((prev) => [...prev, { id: optimistic.id, role: "user", content: question }]);
+      if (!res.ok) {
+        // Error path: keep the question, show the server's error bubble (or a
+        // fallback), and surface the error banner. Every piece of state used
+        // for rendering is normalised so nothing blank is ever shown.
+        const userMessage = isChatMessage(data?.userMessage)
+          ? normalizeMessage(data.userMessage as ChatMessage)
+          : { id: optimistic.id, role: "user" as const, content: question };
+        const errorMessage = isChatMessage(data?.message)
+          ? normalizeMessage({ ...(data.message as ChatMessage), isError: true })
+          : {
+              id: `error-${crypto.randomUUID()}`,
+              role: "assistant" as const,
+              content: EMPTY_REPLY_FALLBACK,
+              isError: true,
+            };
+        setMessages((prev) => appendUnique([...prev], [userMessage, errorMessage]));
+        setError(data?.error || "The agent could not answer. Try again.");
+        return;
       }
-      setPending(null);
 
-      if (data?.message) {
-        setMessages((prev) => [...prev, data.message as ChatMessage]);
-      }
-      if (!res.ok) setError(data?.error || "The agent could not answer. Try again.");
+      // Success path. The server sends `message`; fall back to `answer`, then
+      // to a friendly fallback so a blank/whitespace reply renders as text.
+      const userMessage = isChatMessage(data?.userMessage)
+        ? normalizeMessage(data.userMessage as ChatMessage)
+        : { id: optimistic.id, role: "user" as const, content: question };
+      const rawAnswer =
+        typeof data?.message?.content === "string"
+          ? data.message.content
+          : typeof data?.answer === "string"
+            ? data.answer
+            : "";
+      const assistantMessage = normalizeMessage({
+        id: typeof data?.message?.id === "string" ? data.message.id : `assistant-${crypto.randomUUID()}`,
+        role: "assistant" as const,
+        content: rawAnswer,
+        createdAt: data?.message?.createdAt,
+      });
+      setMessages((prev) => appendUnique([...prev], [userMessage, assistantMessage]));
     } catch (err) {
-      setMessages((prev) => [...prev, { id: optimistic.id, role: "user", content: question }]);
-      setPending(null);
+      setMessages((prev) =>
+        appendUnique(prev, [
+          { id: optimistic.id, role: "user", content: question },
+          { id: `error-${crypto.randomUUID()}`, role: "assistant", content: EMPTY_REPLY_FALLBACK, isError: true },
+        ]),
+      );
       setError(err instanceof Error ? err.message : "Request failed");
     } finally {
+      setPending(null);
       setLoading(false);
       inputRef.current?.focus();
     }
@@ -252,11 +313,14 @@ export default function AgentPage() {
   }
 
   return (
-    // The composer is a normal flex child (never fixed/absolute), so it stays
-    // pinned above the keyboard as the viewport shrinks. `overflow-hidden` keeps
-    // the page itself from scrolling; only the message list scrolls.
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
+    // Full-height flex column so the composer is always the last visible row.
+    // - `h-[100dvh]` tracks the mobile keyboard / browser chrome (no page scroll).
+    // - `overflow-hidden` on the page; only the message list scrolls.
+    // - On mobile the composer is a normal flex child (so it rides above the
+    //   keyboard), and on desktop it stays anchored to the bottom of the pane.
+    // - The app shell drops its chrome on this route, so nothing overlaps it.
+    <div className="flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-background">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:pt-3">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
             AI
@@ -284,7 +348,7 @@ export default function AgentPage() {
       <div
         ref={scrollRef}
         aria-live="polite"
-        className="flex-1 space-y-2 overflow-y-auto overscroll-contain p-4"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4 [-webkit-overflow-scrolling:touch]"
       >
         {messages.length === 0 && !pending && !loading && (
           <div className="mx-auto mt-6 max-w-sm rounded-xl bg-white/80 px-4 py-3 text-center text-sm text-muted-foreground shadow-sm">
@@ -340,7 +404,10 @@ export default function AgentPage() {
         )}
       </div>
 
-      <div className="shrink-0 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      {/* Composer: shrink-0 keeps it pinned to the bottom of the flex column
+          while only the list above scrolls; the safe-area padding keeps it off
+          the iPhone home indicator. It never needs scrolling to reach. */}
+      <div className="shrink-0 border-t bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:p-4 md:pb-4">
         {error && (
           <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
             {error}
@@ -361,9 +428,10 @@ export default function AgentPage() {
             rows={1}
             maxLength={500}
             disabled={loading}
+            enterKeyHint="send"
             placeholder="Type a message…"
             aria-label="Message the project agent"
-            className="max-h-36 min-h-10 flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60"
+            className="max-h-36 min-h-11 flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60 md:text-sm"
           />
           <button
             type="submit"

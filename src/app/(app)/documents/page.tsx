@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, Download, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
+import { Camera, Check, Download, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ import { DOC_CATEGORIES, DOC_CATEGORY_LABELS, type DocCategory } from "@/lib/con
 import { formatDate } from "@/lib/format";
 import { FileViewer, UploadOverlay } from "@/components/file-viewer";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { uploadDocument, filesFromInput } from "@/lib/upload";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
@@ -51,6 +52,7 @@ export default function DocumentsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const activeUploadCategory = category ? (category as DocCategory) : uploadCategory;
 
   const selectCategory = (nextCategory: "" | DocCategory) => {
@@ -91,13 +93,11 @@ export default function DocumentsPage() {
   });
 
   const uploadOne = async (file: File, selectedCategory: DocCategory) => {
-      const fd = new FormData();
-      fd.set("file", file);
-      fd.set("category", selectedCategory);
-      const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-      const data = await readJsonResponse<Doc>(res);
-      if (!res.ok) throw new Error(getErrorMessage(data, "Upload failed"));
-      return data as Doc;
+    // Normalises camera/gallery output (name + MIME) and retries once on flaky
+    // mobile networks before reporting the failure.
+    const result = await uploadDocument<Doc>(file, { category: selectedCategory });
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
   };
 
   const uploadFiles = async (files: File[]) => {
@@ -224,20 +224,48 @@ export default function DocumentsPage() {
           <Button type="button" variant="outline" className="min-h-11" onClick={() => setBulkOpen((open) => !open)} aria-expanded={bulkOpen}>
             {bulkOpen ? "Hide bulk upload" : "Bulk upload"}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploadState.total > 0 && uploadState.done < uploadState.total}
+          >
+            <Camera className="size-4" /> <span className="hidden sm:inline">Photo</span>
+          </Button>
           <Button type="button" className="min-h-11" onClick={() => inputRef.current?.click()} disabled={uploadState.total > 0 && uploadState.done < uploadState.total}>
             {uploadState.total > 0 && uploadState.done < uploadState.total ? <Spinner /> : <Upload className="size-4" />}
             Upload
           </Button>
+          {/* Gallery / files picker. Hidden and opened via ref.click() so mobile
+              browsers treat the tap as a direct gesture on the input. */}
           <input
             ref={inputRef}
             type="file"
-            className="sr-only"
+            className="hidden"
             multiple
             accept="image/*,.pdf,.dwg,.docx,.xlsx,.doc,.xls,application/pdf"
+            aria-hidden="true"
+            tabIndex={-1}
             onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
+              const files = filesFromInput(e.currentTarget);
               if (files.length) void uploadFiles(files);
-              e.target.value = "";
+              e.currentTarget.value = "";
+            }}
+          />
+          {/* Opens the phone's native camera (rear lens) for site photos. */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*"
+            capture="environment"
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={(e) => {
+              const files = filesFromInput(e.currentTarget);
+              if (files.length) void uploadFiles(files);
+              e.currentTarget.value = "";
             }}
           />
         </div>
@@ -368,7 +396,7 @@ export default function DocumentsPage() {
 }
 
 function ImageTable({ items, selected, sharingId, downloadingId, onSelect, onView, onEdit, onAttach, onShare, onDownload }: { items: Doc[]; selected: Doc | null; sharingId: string | null; downloadingId: string | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void; onShare: (doc: Doc) => void; onDownload: (doc: Doc) => void }) {
-  return <section className="table-shell" aria-label="Library files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button><Button variant="outline" size="sm" onClick={() => onDownload(doc)} disabled={downloadingId === doc.id} aria-label={`Download ${doc.name}`} title="Download">{downloadingId === doc.id ? <Spinner /> : <Download className="size-3.5" />}Download</Button><Button variant="outline" size="sm" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}Share</Button></div></td></tr>)}</tbody></table></section>;
+  return <section className="table-shell" aria-label="Document files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => onView(doc)}><Eye className="size-3.5" />View</Button><Button variant="outline" size="sm" onClick={() => onDownload(doc)} disabled={downloadingId === doc.id} aria-label={`Download ${doc.name}`} title="Download">{downloadingId === doc.id ? <Spinner /> : <Download className="size-3.5" />}Download</Button><Button variant="outline" size="sm" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}Share</Button></div></td></tr>)}</tbody></table></section>;
 }
 
 function documentShareLink(doc: Doc) {
@@ -403,7 +431,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
-function LibraryStat({ label, value, detail }: { label: string; value: string; detail: string }) {
+function DocumentStat({ label, value, detail }: { label: string; value: string; detail: string }) {
   return <div className="rounded-2xl border bg-white p-4 shadow-sm"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold tracking-tight">{value}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{detail}</p></div>;
 }
 

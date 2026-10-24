@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
-  ClipboardList,
   FileText,
   Home,
   IndianRupee,
@@ -20,16 +19,18 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/documents", label: "Library", icon: FileText },
-  { href: "/tasks", label: "Work", icon: ClipboardList },
-  { href: "/daily-log", label: "Daily", icon: CalendarDays },
-  { href: "/expenses", label: "Money", icon: IndianRupee },
-  { href: "/contacts", label: "People", icon: Users },
+  { href: "/documents", label: "Documents", icon: FileText },
+  // The old "Work" (tasks) tab is hidden; its tasks are reachable from the
+  // dashboard, and day-to-day site work lives in the Work Log below.
+  { href: "/daily-log", label: "Work Log", icon: CalendarDays },
+  { href: "/expenses", label: "Expenses", icon: IndianRupee },
+  { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/agent", label: "Agent", icon: Sparkles },
   { href: "/more", label: "More", icon: MoreHorizontal },
 ];
 
-const MOBILE_NAV = [NAV[0], NAV[2], NAV[4], NAV[5], NAV[6]];
+// Six tabs fill the mobile bar 1:1; "More" is rendered separately below.
+const MOBILE_NAV = NAV.filter((item) => item.href !== "/more" && item.href !== "/agent");
 
 export function AppShell({
   children,
@@ -40,6 +41,10 @@ export function AppShell({
 }) {
   const path = usePathname();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // The agent is a chat surface: the header/nav chrome is desktop-only there so
+  // the conversation owns the full mobile viewport (input flush with the bottom
+  // edge, like a native messaging app).
+  const immersive = path.startsWith("/agent");
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-white p-5 md:flex md:flex-col">
@@ -83,7 +88,7 @@ export function AppShell({
       </aside>
 
       <div className="md:pl-64">
-        <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between border-b border-black/5 bg-background/90 px-4 py-3 backdrop-blur md:px-8">
+        <header className={cn("sticky top-0 z-20 min-h-14 items-center justify-between border-b border-black/5 bg-background/90 px-4 py-3 backdrop-blur md:px-8 md:flex", immersive ? "hidden" : "flex")}>
           <div>
             <p className="text-sm font-semibold md:hidden">{projectName}</p>
             <p className="hidden text-sm text-muted-foreground md:block">Your construction, in one calm place</p>
@@ -92,27 +97,30 @@ export function AppShell({
             <Settings className="size-5" />
           </Link>
         </header>
-        <main className="px-4 pb-24 pt-5 md:px-8 md:pb-10">{children}</main>
+        <main className={immersive ? "pb-0 pt-0 md:px-8 md:pb-10 md:pt-5" : "px-4 pb-24 pt-5 md:px-8 md:pb-10"}>{children}</main>
       </div>
 
-      <button type="button" aria-label="Add to project" onClick={() => setQuickAddOpen(true)} className="fixed bottom-[4.8rem] right-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform active:scale-95 md:hidden">
-        <Plus className="size-6" />
-      </button>
-      <Sheet open={quickAddOpen} onOpenChange={setQuickAddOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl pb-8">
-          <SheetHeader><SheetTitle>Quick add</SheetTitle></SheetHeader>
-          <div className="grid grid-cols-2 gap-3 px-4">
-            <QuickLink href="/expenses" label="Add expense" onClick={() => setQuickAddOpen(false)} />
-            <QuickLink href="/tasks" label="Add task" onClick={() => setQuickAddOpen(false)} />
-            <QuickLink href="/daily-log" label="Daily log" onClick={() => setQuickAddOpen(false)} />
-            <QuickLink href="/documents" label="Upload document" onClick={() => setQuickAddOpen(false)} />
-            <QuickLink href="/documents" label="Add site photo" onClick={() => setQuickAddOpen(false)} />
-            <QuickLink href="/contacts" label="People" onClick={() => setQuickAddOpen(false)} />
-            <QuickLink href="/settings" label="Settings" onClick={() => setQuickAddOpen(false)} />
-          </div>
-        </SheetContent>
-      </Sheet>
-      <nav aria-label="Primary navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-black/5 bg-white/95 backdrop-blur md:hidden">
+      {!immersive && (
+        <>
+          <button type="button" aria-label="Add to project" onClick={() => setQuickAddOpen(true)} className="fixed bottom-[4.8rem] right-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl transition-transform active:scale-95 md:hidden">
+            <Plus className="size-6" />
+          </button>
+          <Sheet open={quickAddOpen} onOpenChange={setQuickAddOpen}>
+            <SheetContent side="bottom" className="rounded-t-3xl pb-8">
+              <SheetHeader><SheetTitle>Quick add</SheetTitle></SheetHeader>
+              <div className="grid grid-cols-2 gap-3 px-4">
+                <QuickLink href="/expenses" label="Add expense" onClick={() => setQuickAddOpen(false)} />
+                <QuickLink href="/daily-log" label="Add work log" onClick={() => setQuickAddOpen(false)} />
+                <QuickLink href="/documents" label="Upload document" onClick={() => setQuickAddOpen(false)} />
+                <QuickLink href="/documents" label="Add site photo" onClick={() => setQuickAddOpen(false)} />
+                <QuickLink href="/contacts" label="Contacts" onClick={() => setQuickAddOpen(false)} />
+                <QuickLink href="/settings" label="Settings" onClick={() => setQuickAddOpen(false)} />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </>
+      )}
+      <nav aria-label="Primary navigation" className={cn("fixed inset-x-0 bottom-0 z-30 border-t border-black/5 bg-white/95 backdrop-blur md:hidden", immersive ? "hidden" : "grid grid-cols-6")}>
         {MOBILE_NAV.map((item) => {
           const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
           return (

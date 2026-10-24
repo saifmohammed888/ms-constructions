@@ -19,6 +19,19 @@ const QUERY_TIMEOUT_MS = 10_000;
 const HISTORY_LIMIT = 300;
 const CONTEXT_MESSAGES = 12;
 
+// Shown whenever the model finishes without producing any text (for example a
+// `length` finish after only tool calls), so the chat never renders a blank
+// assistant bubble.
+const EMPTY_ANSWER_FALLBACK =
+  "The agent couldn't produce an answer for that. Try rephrasing the question or asking about a specific expense, task, contact, or document.";
+
+/** Trim AI output and fall back to a readable message when it is empty. */
+function normalizeAnswer(input: unknown): string {
+  if (typeof input !== "string") return EMPTY_ANSWER_FALLBACK;
+  const text = input.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  return text.length > 0 ? text : EMPTY_ANSWER_FALLBACK;
+}
+
 // Statements that can mutate data or objects. Anything else (INSERT, UPDATE,
 // DELETE, DDL, CALL, COPY, GRANT, ...) is also rejected because the statement
 // must start with SELECT or WITH.
@@ -216,12 +229,19 @@ export async function POST(req: NextRequest) {
       tools: { query_project_data: queryProjectData },
       stopWhen: stepCountIs(5),
       temperature: 0.1,
-      maxOutputTokens: 600,
+      // Tool calls and the final answer share this budget; too small a value
+      // can end the run before any text is written.
+      maxOutputTokens: 1500,
     });
+
+    // Never persist or return a blank assistant message. Empty/whitespace-only
+    // output becomes a visible, non-error fallback so the UI always has content.
+    const answer = normalizeAnswer(result.text);
+    const hadText = answer !== EMPTY_ANSWER_FALLBACK;
 
     const [assistantRow] = await db
       .insert(agentMessages)
-      .values({ projectId, role: "assistant", content: result.text, isError: false })
+      .values({ projectId, role: "assistant", content: answer, isError: false })
       .returning();
 
     return NextResponse.json({
@@ -235,18 +255,20 @@ export async function POST(req: NextRequest) {
       message: {
         id: assistantRow.id,
         role: assistantRow.role,
-        content: assistantRow.content,
+        content: answer,
         isError: assistantRow.isError,
         createdAt: assistantRow.createdAt,
       },
-      answer: result.text,
+      answer,
+      empty: !hadText,
     });
   } catch (error) {
     console.error("Agent request failed", error);
-    const detail =
+    const rawDetail =
       error instanceof Error
-        ? error.message.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 240)
-        : "Unknown provider error";
+        ? error.message.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").trim().slice(0, 240)
+        : "";
+    const detail = rawDetail || "Unknown provider error";
 
     const [errorRow] = await db
       .insert(agentMessages)

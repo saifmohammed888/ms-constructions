@@ -13,6 +13,7 @@ import { TaskForm } from "@/components/task-form";
 import { formatDate, formatInr } from "@/lib/format";
 import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/lib/constants";
 import { PageLoader } from "@/components/ui/spinner";
+import { copyResultMessage, copyText } from "@/lib/clipboard";
 import Link from "next/link";
 
 type Dash = {
@@ -77,8 +78,10 @@ export default function DashboardPage() {
       const res = await fetch("/api/export");
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || "Could not export project data");
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      toast.success("Project data copied as JSON");
+      // copyText falls back to execCommand / native share / download when the
+      // async clipboard API is unavailable or blocked (common on mobile).
+      const result = await copyText(JSON.stringify(payload, null, 2));
+      toast.success(copyResultMessage(result));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not copy project data");
     } finally {
@@ -96,18 +99,15 @@ export default function DashboardPage() {
             Active stage: {d.currentStage}
           </p>
         </div>
-        <div className="hidden gap-2 sm:flex">
-          <Button variant="outline" className="min-h-11 rounded-xl" onClick={copyProjectData} disabled={exporting}>
-            <Copy className="size-4" /> {exporting ? "Copying…" : "Copy data"}
+        <div className="flex gap-2">
+          <Button variant="outline" className="min-h-11 rounded-xl" onClick={copyProjectData} disabled={exporting} aria-label="Copy project data as JSON" title="Copy project data as JSON">
+            <Copy className="size-4" /> <span className="hidden sm:inline">{exporting ? "Copying…" : "Copy data"}</span>
           </Button>
-          <a href="/api/export/excel" className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-medium"><Download className="size-4" /> Excel</a>
-          <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => setTaskOpen(true)}>
-            <Plus className="size-4" /> Task
+          <a href="/api/export/excel" className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-medium"><Download className="size-4" /> <span className="hidden sm:inline">Excel</span></a>
+          <Button variant="outline" className="min-h-11 rounded-xl" onClick={() => setTaskOpen(true)} aria-label="Add task">
+            <Plus className="size-4" /> <span className="hidden sm:inline">Task</span>
           </Button>
         </div>
-        <Button variant="outline" size="icon" className="sm:hidden" onClick={copyProjectData} disabled={exporting} aria-label="Copy project data as JSON" title="Copy project data as JSON">
-          <Copy className="size-4" />
-        </Button>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Project attention summary">

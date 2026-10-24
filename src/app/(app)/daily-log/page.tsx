@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Eye, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarDays, Camera, Eye, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ResponsiveForm } from "@/components/responsive-form";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DocumentImage, documentFileUrl } from "@/components/document-image";
 import { formatDate, todayIso } from "@/lib/format";
+import { filesFromInput, uploadDocuments } from "@/lib/upload";
 
 type DailyDoc = {
   id: string;
@@ -68,13 +70,24 @@ export default function DailyLogPage() {
   const [search, setSearch] = useState("");
   const [date, setDate] = useState("");
   const [form, setForm] = useState<FormState>(() => emptyForm());
+  const photoInputs = useRef<{ camera: HTMLInputElement | null; library: HTMLInputElement | null }>({ camera: null, library: null });
+
+  /** Merge newly picked/captured photos into the form (never drop earlier picks). */
+  const addFiles = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    setForm((current) => {
+      const known = new Set(current.files.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      const additions = files.filter((file) => !known.has(`${file.name}:${file.size}:${file.lastModified}`));
+      return { ...current, files: [...current.files, ...additions] };
+    });
+  }, []);
 
   const list = useQuery({
     queryKey: ["daily-logs"],
     queryFn: async () => {
       const res = await fetch("/api/daily-logs");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load daily logs");
+      if (!res.ok) throw new Error(data.error || "Could not load work logs");
       return data as DailyLog[];
     },
   });
@@ -90,7 +103,15 @@ export default function DailyLogPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const uploaded = await uploadFiles(form.files, form.date);
+      // Upload photos first (with mobile-safe names/types); a failed photo should
+      // not silently drop the whole log, so we report and continue with the rest.
+      const { uploaded, failed } = await uploadDocuments<DailyDoc>(form.files, {
+        category: "photos",
+        tags: `daily-log,${form.date}`,
+      });
+      if (failed.length > 0) {
+        toast.error(`${failed.length} photo${failed.length === 1 ? "" : "s"} could not be uploaded: ${failed[0].error}`);
+      }
       const documentIds = [...form.documents.map((doc) => doc.id), ...uploaded.map((doc) => doc.id)];
       const body = {
         date: form.date,
@@ -109,11 +130,11 @@ export default function DailyLogPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not save daily log");
+      if (!res.ok) throw new Error(data.error || "Could not save work log");
       return data as DailyLog;
     },
     onSuccess: () => {
-      toast.success(editing ? "Daily log updated" : "Daily log added");
+      toast.success(editing ? "Work log updated" : "Work log added");
       setOpen(false);
       setEditing(null);
       setForm(emptyForm());
@@ -126,10 +147,10 @@ export default function DailyLogPage() {
   const del = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/daily-logs/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Could not delete daily log");
+      if (!res.ok) throw new Error("Could not delete work log");
     },
     onSuccess: () => {
-      toast.success("Daily log deleted");
+      toast.success("Work log deleted");
       setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["daily-logs"] });
     },
@@ -163,7 +184,7 @@ export default function DailyLogPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Daily Log</h1>
+          <h1 className="text-2xl font-semibold">Work Log</h1>
           <p className="text-sm text-muted-foreground">Track daily site notes, blockers, materials, and site photos by date.</p>
         </div>
         <Button className="min-h-11" onClick={startAdd}>
@@ -183,9 +204,9 @@ export default function DailyLogPage() {
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <CalendarDays className="mx-auto size-8 text-muted-foreground" />
-          <p className="mt-3 font-medium">No daily logs yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Add today&apos;s work and photos before details get forgotten.</p>
-          <Button className="mt-4 min-h-11" onClick={startAdd}>Add daily log</Button>
+          <p className="mt-3 font-medium">No work logs yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Add today&apos;s work and site photos before details get forgotten.</p>
+          <Button className="mt-4 min-h-11" onClick={startAdd}>Add work log</Button>
         </div>
       ) : (
         <section className="table-shell">
@@ -213,7 +234,7 @@ export default function DailyLogPage() {
         </section>
       )}
 
-      <ResponsiveForm open={open} onOpenChange={setOpen} title={editing ? "Edit daily log" : "Add daily log"}>
+      <ResponsiveForm open={open} onOpenChange={setOpen} title={editing ? "Edit work log" : "Add work log"}>
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Input className="min-h-11" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
           <Field label="Work completed" value={form.workCompleted} onChange={(value) => setForm({ ...form, workCompleted: value })} required />
@@ -224,11 +245,43 @@ export default function DailyLogPage() {
           <Field label="Notes" value={form.notes} onChange={(value) => setForm({ ...form, notes: value })} />
           <div>
             <label className="text-sm font-medium">Images</label>
-            <label className="mt-1.5 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-white px-4 text-center text-sm text-muted-foreground">
+            <div className="mt-1.5 flex min-h-24 flex-col items-center justify-center rounded-xl border border-dashed bg-white px-4 py-4 text-center text-sm text-muted-foreground">
               <ImagePlus className="mb-2 size-5" />
               Add site photos for this date
-              <input className="sr-only" type="file" accept="image/*" multiple onChange={(e) => setForm({ ...form, files: Array.from(e.target.files ?? []) })} />
-            </label>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <Button type="button" variant="outline" className="min-h-10" onClick={() => photoInputs.current.camera?.click()}>
+                  <Camera className="size-4" /> Take photo
+                </Button>
+                <Button type="button" variant="outline" className="min-h-10" onClick={() => photoInputs.current.library?.click()}>
+                  <ImagePlus className="size-4" /> Choose photos
+                </Button>
+              </div>
+            </div>
+            {/* Opened via ref.click() rather than a wrapping <label>: buttons inside a
+                label submit the form on iOS, and some mobile browsers ignore the
+                sr-only input. Capture opens the native camera; the plain picker gives
+                gallery + files. Both are reset after each pick so re-selecting the
+                same photo still fires onChange. */}
+            <input
+              ref={(el) => { photoInputs.current.camera = el; }}
+              className="hidden"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              aria-hidden="true"
+              tabIndex={-1}
+              onChange={(e) => { addFiles(filesFromInput(e.currentTarget)); e.currentTarget.value = ""; }}
+            />
+            <input
+              ref={(el) => { photoInputs.current.library = el; }}
+              className="hidden"
+              type="file"
+              accept="image/*"
+              multiple
+              aria-hidden="true"
+              tabIndex={-1}
+              onChange={(e) => { addFiles(filesFromInput(e.currentTarget)); e.currentTarget.value = ""; }}
+            />
             {(form.documents.length > 0 || form.files.length > 0) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {form.documents.map((doc) => <AttachmentChip key={doc.id} label={doc.name} onRemove={() => setForm({ ...form, documents: form.documents.filter((item) => item.id !== doc.id) })} />)}
@@ -242,12 +295,12 @@ export default function DailyLogPage() {
 
       <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader><DialogTitle>{detail ? formatDate(detail.date) : "Daily log"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{detail ? formatDate(detail.date) : "Work log"}</DialogTitle></DialogHeader>
           {detail && <DailyLogDetail log={detail} />}
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={Boolean(pendingDelete)} title="Delete daily log?" body={pendingDelete ? `This removes the log for ${formatDate(pendingDelete.date)}. Linked images stay safely in Library and Drive.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
+      <ConfirmDialog open={Boolean(pendingDelete)} title="Delete work log?" body={pendingDelete ? `This removes the log for ${formatDate(pendingDelete.date)}. Photos stay safe in Documents.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
     </div>
   );
 }
@@ -261,25 +314,37 @@ function AttachmentChip({ label, onRemove }: { label: string; onRemove: () => vo
 }
 
 function DailyLogDetail({ log }: { log: DailyLog }) {
-  return <div className="flex flex-col gap-4 text-sm"><Info label="Work completed" value={log.workCompleted} /><Info label="Work in progress" value={log.workInProgress} /><Info label="Planned next" value={log.workPlanned} /><Info label="Blockers" value={log.blockers} /><Info label="Materials received" value={log.materialsReceived} /><Info label="Notes" value={log.notes} />{log.documents.length > 0 && <div><p className="mb-2 font-medium">Images</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{log.documents.map((doc) => <a key={doc.id} href={`/api/documents/${doc.id}/file`} target="_blank" className="overflow-hidden rounded-xl border bg-stone-100"><img src={`/api/documents/${doc.id}/file`} alt={doc.name} className="aspect-square w-full object-cover" /></a>)}</div></div>}</div>;
+  return (
+    <div className="flex flex-col gap-4 text-sm">
+      <Info label="Work completed" value={log.workCompleted} />
+      <Info label="Work in progress" value={log.workInProgress} />
+      <Info label="Planned next" value={log.workPlanned} />
+      <Info label="Blockers" value={log.blockers} />
+      <Info label="Materials received" value={log.materialsReceived} />
+      <Info label="Notes" value={log.notes} />
+      {log.documents.length > 0 && (
+        <div>
+          <p className="mb-2 font-medium">Images</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {log.documents.map((doc) => (
+              <a
+                key={doc.id}
+                href={documentFileUrl(doc.id)}
+                target="_blank"
+                rel="noreferrer"
+                className="overflow-hidden rounded-xl border bg-stone-100"
+              >
+                <DocumentImage id={doc.id} alt={doc.name} className="aspect-square w-full" imgClassName="size-full object-cover" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Info({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 whitespace-pre-wrap">{value}</p></div>;
-}
-
-async function uploadFiles(files: File[], date: string) {
-  const docs: DailyDoc[] = [];
-  for (const file of files) {
-    const fd = new FormData();
-    fd.set("file", file);
-    fd.set("category", "photos");
-    fd.set("tags", `daily-log,${date}`);
-    const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `Could not upload ${file.name}`);
-    docs.push(data as DailyDoc);
-  }
-  return docs;
 }

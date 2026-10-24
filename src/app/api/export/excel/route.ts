@@ -46,7 +46,7 @@ export async function GET() {
     ["Task count", taskRows.length],
     ["Open tasks", taskRows.filter((row) => row.status !== "done").length],
     ["Completed tasks", taskRows.filter((row) => row.status === "done").length],
-    ["People count", contactRows.length],
+    ["Contacts count", contactRows.length],
   ]);
   summary.getCell("A1").font = { bold: true, size: 16, color: { argb: "FF202B2D" } };
   summary.getColumn(1).width = 24;
@@ -64,7 +64,7 @@ export async function GET() {
   work.getColumn(8).numFmt = "dd-mmm-yyyy hh:mm";
   work.getColumn(9).numFmt = "dd-mmm-yyyy hh:mm";
 
-  const money = workbook.addWorksheet("Money");
+  const money = workbook.addWorksheet("Expenses");
   money.addRow(["Date", "Category", "Amount", "Payment mode", "Status", "Due date", "Contact ID", "Notes"]);
   for (const row of expenseRows) money.addRow([new Date(`${row.date}T00:00:00`), row.category, Number(row.amount), row.paymentMode, row.paymentStatus, row.dueDate ? new Date(`${row.dueDate}T00:00:00`) : null, row.contactId, row.notes]);
   styleSheet(money);
@@ -72,7 +72,7 @@ export async function GET() {
   money.getColumn(3).numFmt = '₹#,##0.00';
   money.getColumn(6).numFmt = "dd-mmm-yyyy";
 
-  const people = workbook.addWorksheet("People");
+  const people = workbook.addWorksheet("Contacts");
   people.addRow(["Name", "Role", "Phone", "Alternate phone", "Email", "Tags", "Notes", "Created at"]);
   for (const row of contactRows) people.addRow([row.name, row.role, row.phone, row.altPhone, row.email, row.tags.join(", "), row.notes, row.createdAt]);
   styleSheet(people);
@@ -80,7 +80,7 @@ export async function GET() {
 
   const numeric = workbook.addWorksheet("Numeric Data");
   numeric.addRow(["Metric", "Value", "Unit"]);
-  numeric.addRows([["Budget", settings?.budgetTotal ? Number(settings.budgetTotal) : null, "INR"], ["Total spent", totalSpent, "INR"], ["Payments due", dueAmount, "INR"], ["Task count", taskRows.length, "count"], ["Open tasks", taskRows.filter((row) => row.status !== "done").length, "count"], ["Completed tasks", taskRows.filter((row) => row.status === "done").length, "count"], ["People count", contactRows.length, "count"]]);
+  numeric.addRows([["Budget", settings?.budgetTotal ? Number(settings.budgetTotal) : null, "INR"], ["Total spent", totalSpent, "INR"], ["Payments due", dueAmount, "INR"], ["Task count", taskRows.length, "count"], ["Open tasks", taskRows.filter((row) => row.status !== "done").length, "count"], ["Completed tasks", taskRows.filter((row) => row.status === "done").length, "count"], ["Contacts count", contactRows.length, "count"]]);
   styleSheet(numeric);
   numeric.getColumn(2).numFmt = '₹#,##0.00';
 
