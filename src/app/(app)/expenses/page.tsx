@@ -3,26 +3,24 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Eye, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ExpenseForm } from "@/components/expense-form";
 import { formatDate, formatInr, todayIso } from "@/lib/format";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
   PAYMENT_MODE_LABELS,
+  PAYMENT_STATUS_LABELS,
   type ExpenseCategory,
 } from "@/lib/constants";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CardSkeleton } from "@/components/ui/spinner";
 import { Suspense } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileViewer } from "@/components/file-viewer";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Expense = {
   id: string;
@@ -32,32 +30,35 @@ type Expense = {
   contactId: string | null;
   paymentMode: string | null;
   notes: string | null;
+  paymentStatus: string;
+  dueDate: string | null;
+  receiptDocId: string | null;
+  receiptDocIds?: string[];
+  receiptDocuments?: ReceiptDocument[];
 };
+
+type ReceiptDocument = { id: string; name: string; driveFileId: string; mimeType: string | null; webViewLink: string | null };
 
 function ExpensesInner() {
   const params = useSearchParams();
   const qc = useQueryClient();
   const [category, setCategory] = useState(params.get("category") ?? "");
-  const [month, setMonth] = useState("");
-  const [contactId, setContactId] = useState("");
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [detail, setDetail] = useState<Expense | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  const [sort, setSort] = useState<{ key: "date" | "amount" | "category"; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
 
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: () => fetch("/api/settings").then((r) => r.json()),
   });
-  const contacts = useQuery({
-    queryKey: ["contacts"],
-    queryFn: () => fetch("/api/contacts").then((r) => r.json()),
-  });
   const query = useMemo(() => {
     const s = new URLSearchParams();
     if (category) s.set("category", category);
-    if (month) s.set("month", month);
-    if (contactId) s.set("contact_id", contactId);
     return s.toString();
-  }, [category, month, contactId]);
+  }, [category]);
 
   const list = useQuery({
     queryKey: ["expenses", query],
@@ -74,6 +75,7 @@ function ExpensesInner() {
     },
     onSuccess: () => {
       toast.success("Expense deleted");
+      setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -84,6 +86,15 @@ function ExpensesInner() {
     acc[e.category] = (acc[e.category] ?? 0) + Number(e.amount);
     return acc;
   }, {});
+  const items = useMemo(() => [...(list.data?.items ?? [])].filter((e) => {
+    const needle = search.trim().toLowerCase();
+    return !needle || [e.category, e.paymentMode, e.paymentStatus, e.notes].some((value) => value?.toLowerCase().includes(needle));
+  }).sort((a, b) => {
+    const av = sort.key === "amount" ? Number(a.amount) : sort.key === "category" ? a.category : a.date;
+    const bv = sort.key === "amount" ? Number(b.amount) : sort.key === "category" ? b.category : b.date;
+    return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.direction === "asc" ? 1 : -1);
+  }), [list.data?.items, sort, search]);
+  const toggleSort = (key: "date" | "amount" | "category") => setSort((s) => ({ key, direction: s.key === key && s.direction === "asc" ? "desc" : "asc" }));
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -109,8 +120,8 @@ function ExpensesInner() {
         </div>
       </div>
 
-      <div className="sticky top-14 z-10 -mx-4 flex flex-col gap-2 border-b bg-background px-4 py-3 md:mx-0 md:rounded-xl md:border">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+      <Input className="min-h-11 rounded-xl bg-transparent" placeholder="Search category, payment, or notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex gap-2 overflow-x-auto pb-1">
           <Button size="sm" variant={category === "" ? "default" : "outline"} className="min-h-9" onClick={() => setCategory("")}>
             All
           </Button>
@@ -128,28 +139,6 @@ function ExpensesInner() {
               </Button>
             );
           })}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="month"
-            className="min-h-11 rounded-lg border px-3 text-sm"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-          <Select value={contactId || "all"} onValueChange={(v) => setContactId(v === "all" ? "" : String(v))}>
-            <SelectTrigger className="min-h-11 w-48">
-              <SelectValue placeholder="Payee" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All payees</SelectItem>
-              {(contacts.data ?? []).map((c: { id: string; name: string }) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {list.isLoading ? (
@@ -163,26 +152,7 @@ function ExpensesInner() {
           </Button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {list.data!.items.map((e) => (
-            <li key={e.id} className="flex items-center gap-3 rounded-xl border p-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{formatInr(e.amount)}</p>
-                <p className="text-sm text-muted-foreground">
-                  {EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory]} · {formatDate(e.date)}
-                  {e.paymentMode ? ` · ${PAYMENT_MODE_LABELS[e.paymentMode as keyof typeof PAYMENT_MODE_LABELS]}` : ""}
-                </p>
-                {e.notes && <p className="truncate text-sm">{e.notes}</p>}
-              </div>
-              <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => { setEditing(e); setOpen(true); }}>
-                <Pencil className="size-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="min-h-11 min-w-11" onClick={() => del.mutate(e.id)}>
-                <Trash2 className="size-4" />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[800px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Date" onClick={() => toggleSort("date")} /></th><th className="px-4 py-3"><SortButton label="Category" onClick={() => toggleSort("category")} /></th><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right"><SortButton label="Amount" onClick={() => toggleSort("amount")} /></th><th className="w-36 px-4 py-3" /></tr></thead><tbody>{items.map((e) => <tr key={e.id} className={`border-b last:border-0 ${e.paymentStatus === "due" ? "bg-amber-50/70" : "hover:bg-emerald-50/40"}`}><td className="px-4 py-3">{formatDate(e.date)}</td><td className="px-4 py-3 font-medium">{EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category}</td><td className="px-4 py-3 text-muted-foreground">{e.paymentMode ? PAYMENT_MODE_LABELS[e.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "—"}{e.notes && <span className="ml-2">· {e.notes}</span>}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${e.paymentStatus === "due" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>{e.paymentStatus === "due" ? `${PAYMENT_STATUS_LABELS.due}${e.dueDate ? ` · ${formatDate(e.dueDate)}` : ""}` : PAYMENT_STATUS_LABELS.paid}</span></td><td className="px-4 py-3 text-right font-semibold">{formatInr(e.amount)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View expense" aria-label="View expense" onClick={() => setDetail(e)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Edit expense" aria-label="Edit expense" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete expense" aria-label="Delete expense" onClick={() => setPendingDelete(e)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <ExpenseForm
@@ -195,9 +165,17 @@ function ExpensesInner() {
             : { amount: "", category: "misc", date: todayIso() }
         }
       />
+      <ExpenseDetail expense={detail} documents={detail?.receiptDocuments ?? []} onClose={() => setDetail(null)} />
+      <ConfirmDialog open={Boolean(pendingDelete)} title="Delete expense?" body={pendingDelete ? `${formatInr(pendingDelete.amount)} on ${formatDate(pendingDelete.date)} will be permanently removed.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
     </div>
   );
 }
+
+function ExpenseDetail({ expense, documents, onClose }: { expense: Expense | null; documents: ReceiptDocument[]; onClose: () => void }) {
+  return <Dialog open={Boolean(expense)} onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Expense details</DialogTitle></DialogHeader>{expense && <div className="flex flex-col gap-5"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[["Amount", formatInr(expense.amount)], ["Category", EXPENSE_CATEGORY_LABELS[expense.category as ExpenseCategory] ?? expense.category], ["Date", formatDate(expense.date)], ["Status", expense.paymentStatus === "due" ? PAYMENT_STATUS_LABELS.due : PAYMENT_STATUS_LABELS.paid]].map(([label, value]) => <div key={label} className="rounded-xl bg-muted/50 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}</div><div className="space-y-2 text-sm"><p><span className="text-muted-foreground">Payment mode:</span> {expense.paymentMode ? PAYMENT_MODE_LABELS[expense.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "Not set"}</p>{expense.dueDate && <p><span className="text-muted-foreground">Due date:</span> {formatDate(expense.dueDate)}</p>}<p><span className="text-muted-foreground">Notes:</span> {expense.notes || "No notes"}</p></div><div className="border-t pt-4"><p className="mb-3 text-sm font-semibold">Invoices / receipts ({documents.length})</p>{documents.length ? <div className="flex flex-col gap-4">{documents.map((document) => <div key={document.id}><p className="mb-3 text-sm text-muted-foreground">{document.name}</p><FileViewer doc={document} /></div>)}</div> : <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No invoice or receipt attached.</p>}</div></div>}</DialogContent></Dialog>;
+}
+
+function SortButton({ label, onClick }: { label: string; onClick: () => void }) { return <button className="inline-flex items-center gap-1" onClick={onClick}>{label}<ChevronsUpDown className="size-3.5" /></button>; }
 
 export default function ExpensesPage() {
   return (

@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { documents } from "@/lib/schema";
 import { documentPatchSchema } from "@/lib/zod-schemas";
 import { jsonError } from "@/lib/http";
-import { trashDriveFile, refreshThumbnail, resolveCategoryFolder } from "@/lib/google";
+import { refreshThumbnail, resolveCategoryFolder } from "@/lib/google";
 import { getDrive } from "@/lib/google";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -41,7 +41,8 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const db = await getDb();
   const [existing] = await db.select().from(documents).where(eq(documents.id, id));
-  if (existing) await trashDriveFile(existing.driveFileId);
+  // Keep the Drive original safe. Removing an app record must never delete the source file.
+  if (!existing) return jsonError("Not found", 404);
   await db.delete(documents).where(eq(documents.id, id));
   return NextResponse.json({ ok: true });
 }

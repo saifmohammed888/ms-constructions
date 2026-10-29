@@ -9,7 +9,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { staleTime: 30_000, refetchOnWindowFocus: false },
+          // Keep recently visited pages responsive. Mutations already
+          // invalidate their affected query keys, so this does not leave the
+          // UI stale after edits.
+          queries: {
+            staleTime: 60_000,
+            gcTime: 10 * 60_000,
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+            retry: 1,
+          },
         },
       }),
   );

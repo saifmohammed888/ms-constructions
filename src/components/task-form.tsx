@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ResponsiveForm } from "@/components/responsive-form";
 
 type Task = {
@@ -16,6 +15,7 @@ type Task = {
   dueDate?: string | null;
   goalLabel?: string | null;
   notes?: string | null;
+  priority?: string;
   gcalEventId?: string | null;
 };
 
@@ -33,7 +33,7 @@ export function TaskForm({
   const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
   const [goalLabel, setGoalLabel] = useState(initial?.goalLabel ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [sync, setSync] = useState(Boolean(initial?.gcalEventId));
+  const [priority, setPriority] = useState(initial?.priority ?? "normal");
 
   const save = useMutation({
     mutationFn: async () => {
@@ -43,7 +43,7 @@ export function TaskForm({
         goalLabel: goalLabel || null,
         groupType: goalLabel ? "goal" : "week",
         notes: notes || null,
-        syncCalendar: sync,
+        priority,
       };
       const url = initial?.id ? `/api/tasks/${initial.id}` : "/api/tasks";
       const res = await fetch(url, {
@@ -55,9 +55,8 @@ export function TaskForm({
       if (!res.ok) throw new Error(data.error || "Could not save task");
       return data;
     },
-    onSuccess: (row: { calendarSyncError?: string | null }) => {
+    onSuccess: () => {
       toast.success(initial?.id ? "Task updated" : "Task added");
-      if (row.calendarSyncError) toast.error(row.calendarSyncError);
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       onOpenChange(false);
@@ -79,6 +78,10 @@ export function TaskForm({
           <Input id="title" className="mt-1.5 min-h-11" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
         </div>
         <div>
+          <Label htmlFor="priority">Priority</Label>
+          <select id="priority" className="mt-1.5 min-h-11 w-full rounded-lg border bg-background px-3 text-sm" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>
+        </div>
+        <div>
           <Label htmlFor="due">Due date</Label>
           <Input id="due" type="date" className="mt-1.5 min-h-11" value={dueDate ?? ""} onChange={(e) => setDueDate(e.target.value)} />
         </div>
@@ -96,17 +99,6 @@ export function TaskForm({
           <Label htmlFor="notes">Notes</Label>
           <Textarea id="notes" className="mt-1.5" value={notes ?? ""} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <label className="flex min-h-11 items-center gap-3 text-sm">
-          <Checkbox
-            checked={sync}
-            disabled={!dueDate}
-            onCheckedChange={(v) => setSync(Boolean(v))}
-          />
-          <span>
-            Sync to Google Calendar
-            {!dueDate && <span className="block text-xs text-muted-foreground">Add a due date to enable. One-way: app → calendar.</span>}
-          </span>
-        </label>
         <Button type="submit" className="min-h-11 gap-2" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save task"}
         </Button>

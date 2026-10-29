@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, ImageIcon } from "lucide-react";
+import { FileSpreadsheet, FileText, FileType2 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useState } from "react";
 
@@ -21,6 +21,7 @@ function kind(mime: string | null, name: string) {
 
 export function FileViewer({ doc }: { doc: Doc }) {
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
   const t = kind(doc.mimeType, doc.name);
   const src = `/api/documents/${doc.id}/file`;
   const drivePreview = `https://drive.google.com/file/d/${doc.driveFileId}/preview`;
@@ -28,7 +29,8 @@ export function FileViewer({ doc }: { doc: Doc }) {
   if (failed || t === "other") {
     return (
       <div className="relative h-[min(70vh,720px)] w-full overflow-hidden rounded-xl border bg-stone-100">
-        <iframe title={doc.name} className="h-full w-full" src={drivePreview} />
+        {!ready && <ViewerLoading label="Opening preview…" />}
+        <iframe title={doc.name} className="h-full w-full" src={drivePreview} onLoad={() => setReady(true)} />
       </div>
     );
   }
@@ -37,10 +39,12 @@ export function FileViewer({ doc }: { doc: Doc }) {
     return (
       <div className="relative flex max-h-[70vh] min-h-64 items-center justify-center overflow-auto rounded-xl border bg-stone-950">
         {/* eslint-disable-next-line @next/next/no-img-element */}
+        {!ready && <ViewerLoading label="Loading image…" />}
         <img
           src={src}
           alt={doc.name}
           className="max-h-[70vh] w-full object-contain"
+          onLoad={() => setReady(true)}
           onError={() => setFailed(true)}
         />
       </div>
@@ -49,11 +53,16 @@ export function FileViewer({ doc }: { doc: Doc }) {
 
   return (
     <div className="relative h-[min(70vh,720px)] w-full overflow-hidden rounded-xl border bg-stone-100">
-      <object data={src} type="application/pdf" className="h-full w-full">
-        <iframe title={doc.name} className="h-full w-full" src={drivePreview} />
+      {!ready && <ViewerLoading label="Loading PDF…" />}
+      <object data={src} type="application/pdf" className="h-full w-full" onLoad={() => setReady(true)}>
+        <iframe title={doc.name} className="h-full w-full" src={drivePreview} onLoad={() => setReady(true)} />
       </object>
     </div>
   );
+}
+
+function ViewerLoading({ label }: { label: string }) {
+  return <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-100/90 text-sm text-muted-foreground backdrop-blur-[2px]"><div className="flex items-center gap-2 rounded-full border bg-white px-4 py-2 shadow-sm"><Spinner /><span>{label}</span></div></div>;
 }
 
 export function FileThumb({
@@ -62,16 +71,19 @@ export function FileThumb({
   doc: { id: string; name: string; thumbnailUrl: string | null; mimeType: string | null };
 }) {
   const t = kind(doc.mimeType, doc.name);
-  if (doc.thumbnailUrl) {
+  const ext = doc.name.includes(".") ? doc.name.split(".").pop()!.toUpperCase() : "FILE";
+  if (t === "image") {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={doc.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-stone-950">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/documents/${doc.id}/file`} alt={doc.name} className="h-full w-full object-contain" />
+      </div>
     );
   }
+  const Icon = /xls|xlsx|csv/.test(ext.toLowerCase()) ? FileSpreadsheet : /doc|docx/.test(ext.toLowerCase()) ? FileType2 : FileText;
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-stone-100 text-muted-foreground">
-      {t === "image" ? <ImageIcon className="size-8" /> : <FileText className="size-8" />}
-      <span className="px-2 text-center text-[11px]">{t === "pdf" ? "PDF" : doc.mimeType || "File"}</span>
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-stone-50 to-stone-200 text-muted-foreground">
+      <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-zinc-800 shadow-sm"><Icon className="size-7" /></span>
     </div>
   );
 }

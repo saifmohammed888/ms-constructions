@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -7,10 +7,21 @@ export const metadata: Metadata = {
   description: "Track people, money, tasks, and documents for a Bangalore residential build.",
 };
 
+// resizes-content makes browsers shrink the layout viewport when the on-screen
+// keyboard opens, so viewport-height screens (e.g. the agent chat) stay flush
+// above it instead of being covered.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    // `h-full` gives descendants a real height to size against (the agent chat
+    // uses `h-full`), while the page itself still scrolls normally elsewhere.
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">
+      <body className="h-full">
         <Providers>{children}</Providers>
       </body>
     </html>

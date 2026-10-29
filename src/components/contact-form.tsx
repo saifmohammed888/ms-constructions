@@ -21,6 +21,7 @@ type Contact = {
   id?: string;
   name: string;
   role: string;
+  company?: string | null;
   phone?: string | null;
   altPhone?: string | null;
   email?: string | null;
@@ -40,6 +41,7 @@ export function ContactForm({
   const qc = useQueryClient();
   const [name, setName] = useState(initial?.name ?? "");
   const [role, setRole] = useState(initial?.role ?? "contractor");
+  const [company, setCompany] = useState(initial?.company ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [altPhone, setAltPhone] = useState(initial?.altPhone ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
@@ -51,6 +53,7 @@ export function ContactForm({
       const payload = {
         name,
         role,
+        company: company || null,
         phone: phone || null,
         altPhone: altPhone || null,
         email: email || null,
@@ -90,6 +93,10 @@ export function ContactForm({
         <div>
           <Label htmlFor="name">Name</Label>
           <Input id="name" className="mt-1.5 min-h-11" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+        </div>
+        <div>
+          <Label htmlFor="company">Company</Label>
+          <Input id="company" className="mt-1.5 min-h-11" value={company ?? ""} onChange={(e) => setCompany(e.target.value)} />
         </div>
         <div>
           <Label>Role</Label>

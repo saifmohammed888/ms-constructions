@@ -4,6 +4,7 @@ import {
   DOC_CATEGORIES,
   EXPENSE_CATEGORIES,
   PAYMENT_MODES,
+  PAYMENT_STATUSES,
   TASK_GROUP_TYPES,
   TASK_STATUSES,
 } from "@/lib/constants";
@@ -14,6 +15,7 @@ export const loginSchema = z.object({
 
 export const contactSchema = z.object({
   name: z.string().min(1).max(120),
+  company: z.string().max(120).optional().nullable(),
   role: z.enum(CONTACT_ROLES),
   phone: z.string().max(30).optional().nullable(),
   altPhone: z.string().max(30).optional().nullable(),
@@ -28,8 +30,11 @@ export const expenseSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   contactId: z.string().uuid().optional().nullable(),
   paymentMode: z.enum(PAYMENT_MODES).optional().nullable(),
+  paymentStatus: z.enum(PAYMENT_STATUSES).optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   receiptDocId: z.string().uuid().optional().nullable(),
+  receiptDocIds: z.array(z.string().uuid()).max(50).optional(),
 });
 
 export const taskSchema = z.object({
@@ -42,6 +47,8 @@ export const taskSchema = z.object({
     .optional()
     .nullable(),
   status: z.enum(TASK_STATUSES).optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  assigneeId: z.string().uuid().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   sortOrder: z.number().int().optional(),
   syncCalendar: z.boolean().optional(),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { expenses } from "@/lib/schema";
+import { expenseDocuments, expenses } from "@/lib/schema";
 import { expenseSchema } from "@/lib/zod-schemas";
 import { jsonError } from "@/lib/http";
 
@@ -14,8 +14,13 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const db = await getDb();
   const patch: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.amount != null) patch.amount = String(parsed.data.amount);
+  delete patch.receiptDocIds;
   const [row] = await db.update(expenses).set(patch).where(eq(expenses.id, id)).returning();
   if (!row) return jsonError("Not found", 404);
+  if (parsed.data.receiptDocIds) {
+    await db.delete(expenseDocuments).where(eq(expenseDocuments.expenseId, id));
+    if (parsed.data.receiptDocIds.length) await db.insert(expenseDocuments).values(parsed.data.receiptDocIds.map((documentId) => ({ expenseId: id, documentId }))).onConflictDoNothing();
+  }
   return NextResponse.json(row);
 }
 
