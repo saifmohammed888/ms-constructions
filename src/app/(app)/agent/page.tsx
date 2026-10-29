@@ -358,7 +358,7 @@ export default function AgentPage() {
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Project Agent</p>
             <p className="text-xs text-muted-foreground">
-              {loading ? loadingStatus : historyLoaded ? "Read-only project data · online" : "Loading chat history…"}
+              {loading ? "Working…" : historyLoaded ? "Read-only project data · online" : "Loading chat history…"}
             </p>
           </div>
         </div>
@@ -422,14 +422,6 @@ export default function AgentPage() {
           </div>
         )}
 
-        {loading && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-1.5 rounded-lg rounded-tl-none bg-white px-3 py-2.5 shadow-sm">
-              <Spinner className="size-4 text-emerald-600" label={loadingStatus} />
-              <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{loadingStatus}</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Composer: shrink-0 keeps it pinned to the bottom of the flex column
