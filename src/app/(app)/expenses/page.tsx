@@ -20,6 +20,7 @@ import { CardSkeleton } from "@/components/ui/spinner";
 import { Suspense } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FileViewer } from "@/components/file-viewer";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Expense = {
   id: string;
@@ -46,6 +47,7 @@ function ExpensesInner() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [detail, setDetail] = useState<Expense | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
   const [sort, setSort] = useState<{ key: "date" | "amount" | "category"; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
 
   const settings = useQuery({
@@ -73,6 +75,7 @@ function ExpensesInner() {
     },
     onSuccess: () => {
       toast.success("Expense deleted");
+      setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -149,7 +152,7 @@ function ExpensesInner() {
           </Button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[800px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Date" onClick={() => toggleSort("date")} /></th><th className="px-4 py-3"><SortButton label="Category" onClick={() => toggleSort("category")} /></th><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right"><SortButton label="Amount" onClick={() => toggleSort("amount")} /></th><th className="w-36 px-4 py-3" /></tr></thead><tbody>{items.map((e) => <tr key={e.id} className={`border-b last:border-0 ${e.paymentStatus === "due" ? "bg-amber-50/70" : "hover:bg-emerald-50/40"}`}><td className="px-4 py-3">{formatDate(e.date)}</td><td className="px-4 py-3 font-medium">{EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category}</td><td className="px-4 py-3 text-muted-foreground">{e.paymentMode ? PAYMENT_MODE_LABELS[e.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "—"}{e.notes && <span className="ml-2">· {e.notes}</span>}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${e.paymentStatus === "due" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>{e.paymentStatus === "due" ? `${PAYMENT_STATUS_LABELS.due}${e.dueDate ? ` · ${formatDate(e.dueDate)}` : ""}` : PAYMENT_STATUS_LABELS.paid}</span></td><td className="px-4 py-3 text-right font-semibold">{formatInr(e.amount)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View expense" aria-label="View expense" onClick={() => setDetail(e)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Edit expense" aria-label="Edit expense" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete expense" aria-label="Delete expense" onClick={() => del.mutate(e.id)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[800px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Date" onClick={() => toggleSort("date")} /></th><th className="px-4 py-3"><SortButton label="Category" onClick={() => toggleSort("category")} /></th><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right"><SortButton label="Amount" onClick={() => toggleSort("amount")} /></th><th className="w-36 px-4 py-3" /></tr></thead><tbody>{items.map((e) => <tr key={e.id} className={`border-b last:border-0 ${e.paymentStatus === "due" ? "bg-amber-50/70" : "hover:bg-emerald-50/40"}`}><td className="px-4 py-3">{formatDate(e.date)}</td><td className="px-4 py-3 font-medium">{EXPENSE_CATEGORY_LABELS[e.category as ExpenseCategory] ?? e.category}</td><td className="px-4 py-3 text-muted-foreground">{e.paymentMode ? PAYMENT_MODE_LABELS[e.paymentMode as keyof typeof PAYMENT_MODE_LABELS] : "—"}{e.notes && <span className="ml-2">· {e.notes}</span>}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${e.paymentStatus === "due" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>{e.paymentStatus === "due" ? `${PAYMENT_STATUS_LABELS.due}${e.dueDate ? ` · ${formatDate(e.dueDate)}` : ""}` : PAYMENT_STATUS_LABELS.paid}</span></td><td className="px-4 py-3 text-right font-semibold">{formatInr(e.amount)}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View expense" aria-label="View expense" onClick={() => setDetail(e)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Edit expense" aria-label="Edit expense" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete expense" aria-label="Delete expense" onClick={() => setPendingDelete(e)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <ExpenseForm
@@ -163,6 +166,7 @@ function ExpensesInner() {
         }
       />
       <ExpenseDetail expense={detail} documents={detail?.receiptDocuments ?? []} onClose={() => setDetail(null)} />
+      <ConfirmDialog open={Boolean(pendingDelete)} title="Delete expense?" body={pendingDelete ? `${formatInr(pendingDelete.amount)} on ${formatDate(pendingDelete.date)} will be permanently removed.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
     </div>
   );
 }

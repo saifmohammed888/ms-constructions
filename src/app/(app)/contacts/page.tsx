@@ -11,6 +11,7 @@ import { formatInr, formatDate } from "@/lib/format";
 import { CONTACT_ROLES, CONTACT_ROLE_LABELS, type ContactRole } from "@/lib/constants";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CardSkeleton } from "@/components/ui/spinner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Contact = {
   id: string;
@@ -30,6 +31,7 @@ export default function ContactsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Contact | null>(null);
   const [sort, setSort] = useState<{ key: "name" | "role"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
 
   const list = useQuery({
@@ -48,6 +50,7 @@ export default function ContactsPage() {
     },
     onSuccess: () => {
       toast.success("Contact deleted. Expenses stay, payee is cleared.");
+      setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
@@ -90,11 +93,12 @@ export default function ContactsPage() {
           </Button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Name" onClick={() => toggleSort("name")} /></th><th className="px-4 py-3"><SortButton label="Role" onClick={() => toggleSort("role")} /></th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Work / tags</th><th className="w-32 px-4 py-3" /></tr></thead><tbody>{items.map((c) => <tr key={c.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3"><button className="font-medium hover:underline" onClick={() => setDetail(c.id)}>{c.name}</button></td><td className="px-4 py-3 text-muted-foreground">{CONTACT_ROLE_LABELS[c.role as ContactRole] ?? c.role}</td><td className="px-4 py-3"><div className="flex items-center gap-3">{c.phone ? <><a className="inline-flex items-center gap-1 text-sm underline" href={`tel:${c.phone}`}><Phone className="size-3.5" />{c.phone}</a><a className="inline-flex size-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700" href={whatsappUrl(c.phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${c.name}`} title="WhatsApp"><MessageCircle className="size-4" /></a></> : "—"}</div></td><td className="max-w-[280px] px-4 py-3 text-muted-foreground">{c.tags?.length ? c.tags.join(" · ") : c.notes ? <span className="line-clamp-1" title={c.notes}>{c.notes}</span> : "—"}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => { setEditing(c); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => del.mutate(c.id)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm"><table className="w-full min-w-[760px] text-sm"><thead className="border-b bg-zinc-50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3"><SortButton label="Name" onClick={() => toggleSort("name")} /></th><th className="px-4 py-3"><SortButton label="Role" onClick={() => toggleSort("role")} /></th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Work / tags</th><th className="w-32 px-4 py-3" /></tr></thead><tbody>{items.map((c) => <tr key={c.id} className="border-b last:border-0 hover:bg-zinc-50"><td className="px-4 py-3"><button className="font-medium hover:underline" onClick={() => setDetail(c.id)}>{c.name}</button></td><td className="px-4 py-3 text-muted-foreground">{CONTACT_ROLE_LABELS[c.role as ContactRole] ?? c.role}</td><td className="px-4 py-3"><div className="flex items-center gap-3">{c.phone ? <><a className="inline-flex items-center gap-1 text-sm underline" href={`tel:${c.phone}`}><Phone className="size-3.5" />{c.phone}</a><a className="inline-flex size-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700" href={whatsappUrl(c.phone)} target="_blank" rel="noreferrer" aria-label={`WhatsApp ${c.name}`} title="WhatsApp"><MessageCircle className="size-4" /></a></> : "—"}</div></td><td className="max-w-[280px] px-4 py-3 text-muted-foreground">{c.tags?.length ? c.tags.join(" · ") : c.notes ? <span className="line-clamp-1" title={c.notes}>{c.notes}</span> : "—"}</td><td className="px-4 py-2"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => { setEditing(c); setOpen(true); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => setPendingDelete(c)}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
       )}
 
       <ContactForm key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} initial={editing ?? undefined} />
       <ContactDetail id={detail} onClose={() => setDetail(null)} />
+      <ConfirmDialog open={Boolean(pendingDelete)} title="Delete contact?" body={pendingDelete ? `${pendingDelete.name} will be removed. Existing expenses will remain, but their payee will be cleared.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
     </div>
   );
 }

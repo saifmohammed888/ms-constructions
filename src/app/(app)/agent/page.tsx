@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, Loader2, MessageSquare, Trash2 } from "lucide-react";
+import { ArrowUp, MessageSquare, Trash2 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Spinner } from "@/components/ui/spinner";
 
 type ChatMessage = {
   id: string;
@@ -153,8 +155,10 @@ export default function AgentPage() {
   const [pending, setPending] = useState<PendingMessage | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("Thinking…");
   const [error, setError] = useState("");
   const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -227,6 +231,18 @@ export default function AgentPage() {
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
   }, [input]);
 
+  // Make long model/tool calls legible instead of leaving a static dot
+  // animation on-screen with no sense of progress.
+  useEffect(() => {
+    if (!loading) return;
+    const dataTimer = window.setTimeout(() => setLoadingStatus("Checking project data…"), 700);
+    const answerTimer = window.setTimeout(() => setLoadingStatus("Writing a clear answer…"), 2_500);
+    return () => {
+      window.clearTimeout(dataTimer);
+      window.clearTimeout(answerTimer);
+    };
+  }, [loading]);
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const question = input.trim();
@@ -237,6 +253,7 @@ export default function AgentPage() {
     setPending(optimistic);
     setInput("");
     setError("");
+    setLoadingStatus("Understanding your question…");
     setLoading(true);
 
     try {
@@ -321,6 +338,7 @@ export default function AgentPage() {
       setError("Cleared here, but the server copy could not be removed.");
     } finally {
       setClearing(false);
+      setConfirmClear(false);
     }
   }
 
@@ -340,19 +358,19 @@ export default function AgentPage() {
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Project Agent</p>
             <p className="text-xs text-muted-foreground">
-              {loading ? "typing…" : "Read-only project data · online"}
+              {loading ? loadingStatus : historyLoaded ? "Read-only project data · online" : "Loading chat history…"}
             </p>
           </div>
         </div>
         <button
           type="button"
-          onClick={clearHistory}
+          onClick={() => setConfirmClear(true)}
           disabled={clearing || messages.length === 0}
           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-destructive disabled:opacity-40 disabled:hover:border-zinc-200 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           aria-label="Clear chat"
           title="Clear chat"
         >
-          {clearing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+          {clearing ? <Spinner className="size-3.5" label="Clearing chat" /> : <Trash2 className="size-3.5" />}
           <span className="hidden sm:inline">Clear Chat</span>
         </button>
       </header>
@@ -407,10 +425,8 @@ export default function AgentPage() {
         {loading && (
           <div className="flex justify-start">
             <div className="flex items-center gap-1.5 rounded-lg rounded-tl-none bg-white px-3 py-2.5 shadow-sm">
-              <span className="size-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
-              <span className="size-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
-              <span className="size-1.5 animate-bounce rounded-full bg-zinc-400" />
-              <span className="ml-1 text-xs text-muted-foreground">Thinking…</span>
+              <Spinner className="size-4 text-emerald-600" label={loadingStatus} />
+              <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{loadingStatus}</span>
             </div>
           </div>
         )}
@@ -420,6 +436,12 @@ export default function AgentPage() {
           while only the list above scrolls; the safe-area padding keeps it off
           the iPhone home indicator. It never needs scrolling to reach. */}
       <div className="shrink-0 border-t bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:p-4 md:pb-4">
+        {loading && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800" role="status" aria-live="polite">
+            <Spinner className="size-4 text-emerald-600" label={loadingStatus} />
+            <span>{loadingStatus}</span>
+          </div>
+        )}
         {error && (
           <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
             {error}
@@ -451,10 +473,11 @@ export default function AgentPage() {
             aria-label="Send message"
             className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-700 disabled:opacity-40"
           >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-5" />}
+            {loading ? <Spinner className="size-4" label="Sending message" /> : <ArrowUp className="size-5" />}
           </button>
         </form>
       </div>
+      <ConfirmDialog open={confirmClear} title="Clear chat history?" body="This permanently removes this conversation from this device and the server." confirmLabel="Clear chat" pending={clearing} onCancel={() => setConfirmClear(false)} onConfirm={clearHistory} />
     </div>
   );
 }

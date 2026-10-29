@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ResponsiveForm } from "@/components/responsive-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatInr } from "@/lib/format";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const trackers = {
   decisions: {
@@ -69,6 +70,7 @@ export default function MorePage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const config = trackers[tracker];
 
@@ -121,6 +123,7 @@ export default function MorePage() {
     },
     onSuccess: () => {
       toast.success("Entry deleted");
+      setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["tracker", tracker] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -172,7 +175,7 @@ export default function MorePage() {
               {rows.map((row) => (
                 <tr key={row.id}>
                   {config.columns.map((field, index) => <td key={field} className={index === 0 ? "font-medium" : "text-muted-foreground"}>{displayValue(field, row)}</td>)}
-                  <td><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => editEntry(row)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => remove.mutate(row.id)}><Trash2 className="size-4" /></Button></div></td>
+                  <td><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" onClick={() => editEntry(row)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" onClick={() => setPendingDelete(row)}><Trash2 className="size-4" /></Button></div></td>
                 </tr>
               ))}
               {!list.isLoading && rows.length === 0 && <tr><td className="py-8 text-center text-muted-foreground" colSpan={config.columns.length + 1}>No entries yet.</td></tr>}
@@ -187,6 +190,7 @@ export default function MorePage() {
           <Button type="submit" className="min-h-11" disabled={save.isPending}>{save.isPending ? "Saving..." : editing ? "Save" : "Add"}</Button>
         </form>
       </ResponsiveForm>
+      <ConfirmDialog open={Boolean(pendingDelete)} title={`Delete ${config.title.toLowerCase()} entry?`} body={pendingDelete ? `“${pendingDelete.title}” will be permanently removed.` : ""} pending={remove.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)} />
     </div>
   );
 }

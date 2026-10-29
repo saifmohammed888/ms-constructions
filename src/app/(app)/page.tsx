@@ -26,7 +26,6 @@ type Dash = {
   overdueCount: number;
   recent: { id: string; amount: string; category: string; date: string }[];
   duePayments: { id: string; amount: string; category: string; dueDate: string | null; notes: string | null }[];
-  recentPhotos: { id: string; name: string; mimeType: string | null; uploadedAt: string }[];
   missingDocuments: string[];
   currentStage: string;
   setupComplete: boolean;

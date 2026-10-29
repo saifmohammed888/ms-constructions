@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText, stepCountIs, tool } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { asc, sql } from "drizzle-orm";
+import { asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getDb } from "@/lib/db";
+import { getAgentDb } from "@/lib/db";
 import { agentMessages, projects } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 
@@ -13,8 +13,8 @@ export const maxDuration = 60;
 const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY });
 
 const MAX_QUERY_LENGTH = 4000;
-const DEFAULT_ROW_LIMIT = 100;
-const MAX_ROW_LIMIT = 200;
+const DEFAULT_ROW_LIMIT = 30;
+const MAX_ROW_LIMIT = 100;
 const QUERY_TIMEOUT_MS = 10_000;
 const HISTORY_LIMIT = 300;
 const CONTEXT_MESSAGES = 12;
@@ -202,7 +202,7 @@ const queryProjectData = tool({
     const rowLimit = Math.min(limit ?? DEFAULT_ROW_LIMIT, MAX_ROW_LIMIT);
 
     try {
-      const db = await getDb();
+      const db = await getAgentDb();
       // Wrapping in a subquery means even a statement that slipped past the
       // keyword checks cannot return more than `rowLimit` rows.
       const result = await withTimeout(
@@ -242,7 +242,7 @@ const executeWriteQuery = tool({
     if (!guarded.ok) return { success: false, error: guarded.error };
 
     try {
-      const db = await getDb();
+      const db = await getAgentDb();
       const result = await withTimeout(db.execute(sql.raw(guarded.query)), QUERY_TIMEOUT_MS);
       const rows = Array.isArray(result) ? result : [];
       const rowCount = rows.length > 0 ? rows.length : ((result as { rowCount?: number }).rowCount ?? 0);
@@ -263,16 +263,23 @@ const executeWriteQuery = tool({
 });
 
 async function defaultProjectId() {
-  const db = await getDb();
-  const [project] = await db.select({ id: projects.id }).from(projects).limit(1);
-  return project?.id ?? null;
+  agentProjectId ??= (async () => {
+    const db = await getAgentDb();
+    const [project] = await db.select({ id: projects.id }).from(projects).limit(1);
+    return project?.id ?? null;
+  })();
+  return agentProjectId;
 }
+
+// The project is stable for the lifetime of a warm server instance, so avoid
+// a separate lookup on every chat message.
+let agentProjectId: Promise<string | null> | null = null;
 
 export async function GET() {
   if (!(await getSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const db = await getDb();
+    const db = await getAgentDb();
     const rows = await db
       .select()
       .from(agentMessages)
@@ -298,7 +305,7 @@ export async function DELETE() {
   if (!(await getSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const db = await getDb();
+    const db = await getAgentDb();
     await db.delete(agentMessages);
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -321,7 +328,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ask a shorter question (max 500 characters)." }, { status: 400 });
   }
 
-  const db = await getDb();
+  const db = await getAgentDb();
   const projectId = await defaultProjectId();
 
   // Persist the user's message first so it survives a provider failure.
@@ -331,14 +338,16 @@ export async function POST(req: NextRequest) {
     .returning();
 
   try {
-    const history = await db
+    // Only the final context window is sent to the model. Fetching 300 rows
+    // and slicing in memory added database transfer and model-input latency.
+    const history = (await db
       .select({ role: agentMessages.role, content: agentMessages.content })
       .from(agentMessages)
-      .orderBy(asc(agentMessages.createdAt))
-      .limit(HISTORY_LIMIT);
+      .orderBy(desc(agentMessages.createdAt))
+      .limit(CONTEXT_MESSAGES))
+      .reverse();
 
     const context = history
-      .slice(-CONTEXT_MESSAGES)
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
@@ -361,7 +370,7 @@ export async function POST(req: NextRequest) {
       temperature: 0.1,
       // Tool calls and the final answer share this budget; too small a value
       // can end the run before any text is written.
-      maxOutputTokens: 1500,
+      maxOutputTokens: 700,
     });
 
     // Never persist or return a blank assistant message. Empty/whitespace-only

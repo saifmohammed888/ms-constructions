@@ -11,6 +11,7 @@ import { TaskForm } from "@/components/task-form";
 import { CardSkeleton } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate, todayIso } from "@/lib/format";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Task = {
   id: string;
@@ -32,6 +33,7 @@ export default function TasksPage() {
   const [editing, setEditing] = useState<Task | null>(null);
   const [statusView, setStatusView] = useState<"active" | "completed" | "all">("active");
   const [detail, setDetail] = useState<Task | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [search, setSearch] = useState("");
   const list = useQuery({
     queryKey: ["tasks"],
@@ -62,6 +64,7 @@ export default function TasksPage() {
     },
     onSuccess: () => {
       toast.success("Task deleted");
+      setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -107,7 +110,7 @@ export default function TasksPage() {
       {overdue.length > 0 && (
         <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-3">
           <p className="mb-2 text-sm font-medium text-destructive">Overdue</p>
-            <TaskTable items={overdue} overdue onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={(t) => del.mutate(t.id)} />
+            <TaskTable items={overdue} overdue onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={setPendingDelete} />
         </section>
       )}
 
@@ -119,11 +122,12 @@ export default function TasksPage() {
           {statusView !== "completed" && <Button className="mt-4 min-h-11" onClick={() => setOpen(true)}>Add your first task</Button>}
         </div>
       ) : (
-        <section className="overflow-hidden rounded-2xl border bg-white p-3 shadow-sm"><TaskTable items={tasks} onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={(t) => del.mutate(t.id)} /></section>
+        <section className="overflow-hidden rounded-2xl border bg-white p-3 shadow-sm"><TaskTable items={tasks} onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={setPendingDelete} /></section>
       )}
 
       <TaskForm key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} initial={editing ?? undefined} />
       <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && setDetail(null)}><DialogContent><DialogHeader><DialogTitle>{detail?.title}</DialogTitle></DialogHeader>{detail && <div className="flex flex-col gap-3 text-sm"><p><span className="text-muted-foreground">Status:</span> {detail.status === "done" ? "Completed" : "Pending"}</p><p><span className="text-muted-foreground">Due:</span> {formatDate(detail.dueDate)}</p>{detail.goalLabel && <p><span className="text-muted-foreground">Goal:</span> {detail.goalLabel}</p>}<p className="whitespace-pre-wrap"><span className="text-muted-foreground">Notes:</span> {detail.notes || "No notes"}</p></div>}</DialogContent></Dialog>
+      <ConfirmDialog open={Boolean(pendingDelete)} title="Delete task?" body={pendingDelete ? `“${pendingDelete.title}” will be permanently removed.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
     </div>
   );
 }

@@ -8,16 +8,27 @@ type AppDb = ReturnType<typeof drizzlePg<typeof schema>>;
 
 let cached: AppDb | null = null;
 let ready = false;
+// Concurrent requests on a cold instance share one bootstrap instead of each
+// queueing its own copy of the DDL.
+let bootstrapping: Promise<AppDb> | null = null;
 
-// Prefer the dedicated writer endpoint (it can reach the primary directly, so
-// the agent's write tool always sees fresh rows) and fall back to DATABASE_URL.
+// Bump when the DDL below changes so existing databases re-run it once.
+const SCHEMA_VERSION = 1;
+
+// Normal application routes always use DATABASE_URL. Agent traffic uses its
+// own connection and never shares this pool.
 const databaseConnectionString = databaseUrl();
 const pool = databaseConnectionString ? new Pool({ connectionString: databaseConnectionString }) : null;
+const agentConnectionString = agentDatabaseUrl();
+const agentPool = agentConnectionString ? new Pool({ connectionString: agentConnectionString }) : null;
 
 // Keep one pool per warm Fluid Compute instance. Vercel closes idle connections
 // safely after each invocation through attachDatabasePool.
 if (pool) {
   attachDatabasePool(pool);
+}
+if (agentPool) {
+  attachDatabasePool(agentPool);
 }
 
 const DDL = `
@@ -127,11 +138,20 @@ CREATE INDEX IF NOT EXISTS expenses_category_idx ON expenses (category);
 CREATE INDEX IF NOT EXISTS expenses_contact_idx ON expenses (contact_id);
 CREATE INDEX IF NOT EXISTS documents_category_idx ON documents (category);
 CREATE INDEX IF NOT EXISTS documents_uploaded_at_idx ON documents (uploaded_at DESC);
+CREATE TABLE IF NOT EXISTS app_schema (id int PRIMARY KEY, version int NOT NULL);
+INSERT INTO app_schema (id, version) VALUES (1, ${SCHEMA_VERSION})
+  ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version;
 `;
 
 export function databaseUrl() {
-  // A dedicated writer/pooled primary endpoint wins over the generic URL.
-  const raw = process.env.DATABASE_URL_WRITER || process.env.DATABASE_URL;
+  return normalizeDatabaseUrl(process.env.DATABASE_URL);
+}
+
+export function agentDatabaseUrl() {
+  return normalizeDatabaseUrl(process.env.DATABASE_AGENT);
+}
+
+function normalizeDatabaseUrl(raw: string | undefined) {
   if (!raw) return "";
   try {
     const u = new URL(raw);
@@ -145,6 +165,18 @@ export function databaseUrl() {
 }
 
 async function applyDdl(exec: (sql: string) => Promise<unknown>) {
+  // Send the whole script as one multi-statement query: a single network
+  // round-trip instead of one per statement. Against a remote pooler each
+  // round-trip costs hundreds of ms, which previously added ~20s to the first
+  // request on a cold instance (and timed the login out).
+  try {
+    await exec(DDL);
+    return;
+  } catch {
+    // A single unsupported statement (e.g. an extension needing superuser)
+    // aborts the batch, so retry statement by statement and tolerate the
+    // benign "already exists"/"duplicate" cases.
+  }
   for (const stmt of DDL.split(";").map((s) => s.trim()).filter(Boolean)) {
     try {
       await exec(stmt);
@@ -156,14 +188,32 @@ async function applyDdl(exec: (sql: string) => Promise<unknown>) {
   }
 }
 
-export async function getDb(): Promise<AppDb> {
-  if (cached && ready) return cached;
+function rowsOf(result: unknown): Record<string, unknown>[] {
+  if (Array.isArray(result)) return rowsOf(result[result.length - 1]);
+  const rows = (result as { rows?: unknown })?.rows;
+  return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+}
 
+async function schemaIsCurrent(exec: (sql: string) => Promise<unknown>) {
+  try {
+    const rows = rowsOf(await exec(`SELECT version FROM app_schema WHERE id = 1`));
+    return Number(rows[0]?.version) === SCHEMA_VERSION;
+  } catch {
+    // Table missing (fresh database) or not readable: run the DDL.
+    return false;
+  }
+}
+
+async function bootstrap(exec: (sql: string) => Promise<unknown>) {
+  if (!(await schemaIsCurrent(exec))) await applyDdl(exec);
+}
+
+async function initDb(): Promise<AppDb> {
   const url = databaseConnectionString;
   if (url) {
     if (!pool) throw new Error("Database pool is unavailable");
     cached = drizzlePg(pool, { schema });
-    await applyDdl((s) => pool.query(s));
+    await bootstrap((s) => pool.query(s));
   } else if (process.env.VERCEL) {
     throw new Error("DATABASE_URL_WRITER / DATABASE_URL is missing on Vercel");
   } else {
@@ -176,20 +226,51 @@ export async function getDb(): Promise<AppDb> {
     const pglite = new PGlite(path.join(dir, "construction"));
     await pglite.waitReady;
     cached = drizzlePglite(pglite, { schema }) as unknown as AppDb;
-    await applyDdl((s) => pglite.exec(s));
+    await bootstrap((s) => pglite.exec(s));
   }
 
   const db = cached;
   const existing = await db.select().from(settings).limit(1);
   if (existing.length === 0) {
-    await db.insert(settings).values({ id: 1, projectName: "My Construction" });
+    // Also covers the race where another instance seeded the row first.
+    await db.insert(settings).values({ id: 1, projectName: "My Construction" }).onConflictDoNothing();
   }
   ready = true;
   return db;
 }
 
+export async function getDb(): Promise<AppDb> {
+  if (cached && ready) return cached;
+  if (!bootstrapping) {
+    bootstrapping = initDb().catch((err) => {
+      // Let the next request retry instead of caching a transient failure.
+      bootstrapping = null;
+      ready = false;
+      throw err;
+    });
+  }
+  return bootstrapping;
+}
+
+let agentCached: AppDb | null = null;
+
+/** Database client reserved for the agent route and its SQL tools. */
+export async function getAgentDb(): Promise<AppDb> {
+  if (agentCached) return agentCached;
+  if (!agentPool) throw new Error("DATABASE_AGENT is missing");
+  // Agent access must never attempt runtime DDL or bootstrap data.
+  agentCached = drizzlePg(agentPool, { schema });
+  return agentCached;
+}
+
 export async function getSettingsRow() {
   const db = await getDb();
+  const rows = await db.select().from(settings).where(eq(settings.id, 1)).limit(1);
+  return rows[0];
+}
+
+export async function getAgentSettingsRow() {
+  const db = await getAgentDb();
   const rows = await db.select().from(settings).where(eq(settings.id, 1)).limit(1);
   return rows[0];
 }

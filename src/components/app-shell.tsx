@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -42,7 +43,28 @@ export function AppShell({
   projectName: string;
 }) {
   const path = usePathname();
+  const queryClient = useQueryClient();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const prefetchRouteData = useCallback((href: string) => {
+    const routeQueries: Record<string, { key: string[]; url: string } | undefined> = {
+      "/": { key: ["dashboard"], url: "/api/dashboard" },
+      "/daily-log": { key: ["daily-logs"], url: "/api/daily-logs" },
+      "/expenses": { key: ["expenses", ""], url: "/api/expenses" },
+      "/contacts": { key: ["contacts", "", ""], url: "/api/contacts" },
+      "/tasks": { key: ["tasks"], url: "/api/tasks" },
+    };
+    const query = routeQueries[href];
+    if (!query) return;
+    void queryClient.prefetchQuery({
+      queryKey: query.key,
+      queryFn: async () => {
+        const response = await fetch(query.url);
+        if (!response.ok) throw new Error(`Could not prefetch ${href}`);
+        return response.json();
+      },
+      staleTime: 60_000,
+    });
+  }, [queryClient]);
   // The agent is a chat surface: the header/nav chrome is desktop-only there so
   // the conversation owns the full mobile viewport (input flush with the bottom
   // edge, like a native messaging app).
@@ -68,6 +90,8 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
+                onMouseEnter={() => prefetchRouteData(item.href)}
+                onFocus={() => prefetchRouteData(item.href)}
                 className={cn(
                   "flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
                   active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary",
@@ -137,6 +161,8 @@ export function AppShell({
             <Link
               key={item.href}
               href={item.href}
+              onTouchStart={() => prefetchRouteData(item.href)}
+              onFocus={() => prefetchRouteData(item.href)}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[10px] leading-tight",
