@@ -25,11 +25,29 @@ const CONTEXT_MESSAGES = 12;
 const EMPTY_ANSWER_FALLBACK =
   "The agent couldn't produce an answer for that. Try rephrasing the question or asking about a specific expense, task, contact, or document.";
 
-/** Trim AI output and fall back to a readable message when it is empty. */
-function normalizeAnswer(input: unknown): string {
-  if (typeof input !== "string") return EMPTY_ANSWER_FALLBACK;
-  const text = input.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
-  return text.length > 0 ? text : EMPTY_ANSWER_FALLBACK;
+/** Trim model output without treating an empty tool-only response as an error. */
+function cleanAnswer(input: unknown): string {
+  if (typeof input !== "string") return "";
+  return input.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+}
+
+/**
+ * Some providers finish immediately after a successful tool call and omit the
+ * final assistant text. A completed write is still a successful outcome, so
+ * turn the tool result into a useful confirmation rather than a false error.
+ */
+function writeConfirmation(toolResults: unknown[]): string | null {
+  for (const result of toolResults) {
+    if (!result || typeof result !== "object") continue;
+    const record = result as { toolName?: unknown; output?: unknown };
+    if (record.toolName !== "execute_write_query" || !record.output || typeof record.output !== "object") continue;
+    const output = record.output as { success?: unknown; message?: unknown; rowCount?: unknown };
+    if (output.success !== true) continue;
+    if (typeof output.message === "string" && output.message.trim()) return `Done — ${output.message.trim()}.`;
+    if (typeof output.rowCount === "number") return `Done — updated ${output.rowCount} record${output.rowCount === 1 ? "" : "s"}.`;
+    return "Done — your project record was updated.";
+  }
+  return null;
 }
 
 // Statements that can mutate data or objects. Anything else (INSERT, UPDATE,
@@ -373,10 +391,12 @@ export async function POST(req: NextRequest) {
       maxOutputTokens: 700,
     });
 
-    // Never persist or return a blank assistant message. Empty/whitespace-only
-    // output becomes a visible, non-error fallback so the UI always has content.
-    const answer = normalizeAnswer(result.text);
-    const hadText = answer !== EMPTY_ANSWER_FALLBACK;
+    // Never persist or return a blank assistant message. When a provider ends
+    // after a write-tool call, confirm that completed write instead of showing
+    // a misleading generic fallback.
+    const generatedText = cleanAnswer(result.text);
+    const answer = generatedText || writeConfirmation(result.toolResults) || EMPTY_ANSWER_FALLBACK;
+    const hadText = Boolean(generatedText);
 
     const [assistantRow] = await db
       .insert(agentMessages)
