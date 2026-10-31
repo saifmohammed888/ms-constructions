@@ -20,6 +20,9 @@ type Dash = {
   projectName: string;
   budgetTotal: number | null;
   totalSpent: number;
+  totalDue: number;
+  unclassifiedTotal: number;
+  recordedTotal: number;
   byCategory: { category: string; amount: number }[];
   monthly: { month: string; amount: number }[];
   thisWeek: { id: string; title: string; dueDate: string | null; status: string }[];
@@ -38,8 +41,9 @@ export default function DashboardPage() {
   const [exporting, setExporting] = useState(false);
   const dash = useQuery({
     queryKey: ["dashboard"],
-    queryFn: async () => {
-      const res = await fetch("/api/dashboard");
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const res = await fetch("/api/dashboard", { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) });
       if (!res.ok) throw new Error("Could not load dashboard");
       return res.json() as Promise<Dash>;
     },
@@ -64,8 +68,9 @@ export default function DashboardPage() {
   }
   if (dash.isError) {
     return (
-      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive">
-        Could not load the dashboard. Refresh and try again.
+      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive" role="alert">
+        The dashboard could not load. Check your connection and try again.
+        <Button className="ml-3" variant="outline" onClick={() => dash.refetch()}>Try again</Button>
       </div>
     );
   }
@@ -110,21 +115,22 @@ export default function DashboardPage() {
       </div>
 
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Project attention summary">
-        <AttentionCard href="/tasks" title="Work needing attention" value={d.overdueCount ? `${d.overdueCount} overdue` : "On track"} detail={d.thisWeek.length ? `${d.thisWeek.length} task${d.thisWeek.length === 1 ? "" : "s"} this week` : "No tasks due this week"} tone={d.overdueCount ? "red" : "green"} />
-        <AttentionCard href="/expenses" title="Payments to plan" value={formatInr(d.duePayments.reduce((sum, payment) => sum + Number(payment.amount), 0))} detail={`${d.duePayments.length} upcoming or overdue`} tone={d.duePayments.length ? "amber" : "green"} />
+        <AttentionCard href="/tasks" title="Work needing attention" value={d.overdueCount ? `${d.overdueCount} overdue` : d.thisWeek.length ? `${d.thisWeek.length} due this week` : "No tasks due this week"} detail="Review tasks and dates" tone={d.overdueCount ? "red" : "green"} />
+        <AttentionCard href="/expenses" title="Payments to plan" value={formatInr(d.totalDue)} detail="Total recorded as due" tone={d.totalDue ? "amber" : "green"} />
         <AttentionCard href="/documents" title="Project records" value={d.missingDocuments.length ? `${d.missingDocuments.length} missing` : "Ready"} detail={d.missingDocuments.length ? d.missingDocuments.map((category) => category[0].toUpperCase() + category.slice(1)).join(", ") : "Core documents are present"} tone={d.missingDocuments.length ? "blue" : "green"} />
       </section>
 
       <Card className="overflow-hidden rounded-2xl border-0 bg-zinc-950 text-white shadow-sm">
         <CardContent className="pt-6">
           <BudgetBar spent={d.totalSpent} budget={d.budgetTotal} />
+          <p className="mt-3 text-xs text-zinc-300">Paid {formatInr(d.totalSpent)} · Due {formatInr(d.totalDue)} · Total recorded {formatInr(d.recordedTotal)}{d.unclassifiedTotal !== 0 ? ` · Other status ${formatInr(d.unclassifiedTotal)}` : ""}</p>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="rounded-2xl border-black/5 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Spend by category</CardTitle>
+            <CardTitle className="text-base">Paid by category</CardTitle>
           </CardHeader>
           <CardContent>
             <CategoryDonut
@@ -135,7 +141,7 @@ export default function DashboardPage() {
         </Card>
         <Card className="rounded-2xl border-black/5 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Monthly burn</CardTitle>
+            <CardTitle className="text-base">Monthly paid expenses</CardTitle>
           </CardHeader>
           <CardContent>
             <MonthlyBurn data={d.monthly} />

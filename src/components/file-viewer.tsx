@@ -20,6 +20,10 @@ function kind(mime: string | null, name: string) {
 }
 
 export function FileViewer({ doc }: { doc: Doc }) {
+  return <FileViewerContent key={doc.id} doc={doc} />;
+}
+
+function FileViewerContent({ doc }: { doc: Doc }) {
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const t = kind(doc.mimeType, doc.name);
@@ -31,6 +35,7 @@ export function FileViewer({ doc }: { doc: Doc }) {
       <div className="relative h-[min(70vh,720px)] w-full overflow-hidden rounded-xl border bg-stone-100">
         {!ready && <ViewerLoading label="Opening preview…" />}
         <iframe title={doc.name} className="h-full w-full" src={drivePreview} onLoad={() => setReady(true)} />
+        <a href={drivePreview} target="_blank" rel="noreferrer" className="absolute bottom-3 right-3 z-20 rounded-lg border bg-white px-3 py-2 text-sm font-medium shadow-sm">Open in Drive</a>
       </div>
     );
   }
@@ -57,6 +62,7 @@ export function FileViewer({ doc }: { doc: Doc }) {
       <object data={src} type="application/pdf" className="h-full w-full" onLoad={() => setReady(true)}>
         <iframe title={doc.name} className="h-full w-full" src={drivePreview} onLoad={() => setReady(true)} />
       </object>
+      <a href={drivePreview} target="_blank" rel="noreferrer" className="absolute bottom-3 right-3 z-20 rounded-lg border bg-white px-3 py-2 text-sm font-medium shadow-sm">Open in Drive</a>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { settings } from "@/lib/schema";
 import { settingsSchema } from "@/lib/zod-schemas";
 import { jsonError } from "@/lib/http";
 import { googleConfigured } from "@/lib/google";
+import { envPasswordHash } from "@/lib/password";
 
 export async function GET() {
   const row = await getSettingsRow();
@@ -19,13 +20,14 @@ export async function GET() {
     lastBackupAt: row.lastBackupAt,
     setupComplete: row.setupComplete,
     googleConfigured: googleConfigured(),
-    hasEnvPassword: Boolean(process.env.APP_PASSWORD_HASH),
+    hasEnvPassword: Boolean(envPasswordHash()),
   });
 }
 
 export async function PATCH(req: NextRequest) {
   const parsed = settingsSchema.safeParse(await req.json());
   if (!parsed.success) return jsonError("Check settings");
+  if (parsed.data.password && envPasswordHash()) return jsonError("The password is managed by APP_PASSWORD_HASH. Change it in your deployment settings.", 409);
   const db = await getDb();
   const patch: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.budgetTotal != null) patch.budgetTotal = String(parsed.data.budgetTotal);
@@ -43,6 +45,6 @@ export async function PATCH(req: NextRequest) {
     lastBackupAt: row.lastBackupAt,
     setupComplete: row.setupComplete,
     googleConfigured: googleConfigured(),
-    hasEnvPassword: Boolean(process.env.APP_PASSWORD_HASH),
+    hasEnvPassword: Boolean(envPasswordHash()),
   });
 }

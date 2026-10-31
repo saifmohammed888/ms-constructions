@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS } from "@/lib/constants";
 import { PasswordField } from "@/components/password-field";
 import { PageLoader, Spinner } from "@/components/ui/spinner";
-import { formatDate, formatInr } from "@/lib/format";
+import { formatInr } from "@/lib/format";
 
 function SettingsInner() {
   const params = useSearchParams();
@@ -25,6 +25,9 @@ function SettingsInner() {
   const [budget, setBudget] = useState("");
   const [cats, setCats] = useState<Record<string, string>>({});
   const [password, setPassword] = useState("");
+  const categoryTotal = Object.values(cats).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const hasCategoryAmounts = Object.values(cats).some((value) => value.trim() !== "");
+  const budgetValue = budget.trim() === "" ? null : Number(budget);
 
   useEffect(() => {
     const g = params.get("google");
@@ -135,6 +138,7 @@ function SettingsInner() {
                 </div>
               ))}
             </div>
+            {hasCategoryAmounts && <p className="mt-2 text-xs text-muted-foreground">Category total: {formatInr(categoryTotal)}{budgetValue !== null && Number.isFinite(budgetValue) ? ` · Difference from total budget: ${formatInr(categoryTotal - budgetValue)}` : " · Set a total budget to compare."} Category amounts may overlap; review them before treating this as a variance.</p>}
           </div>
           <Button className="min-h-11 gap-2" onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending && <Spinner />}
@@ -169,9 +173,9 @@ function SettingsInner() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
           <p>
-            Last backup: {settings.data?.lastBackupAt ? formatDate(settings.data.lastBackupAt) : "Not yet"}
+            Last successful backup: {settings.data?.lastBackupAt ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(new Date(settings.data.lastBackupAt)) : "Unknown / not yet recorded"}
           </p>
-          <p className="text-muted-foreground">Weekly Sunday 8:00 pm IST to Drive/Backups, plus this manual button.</p>
+          <p className="text-muted-foreground">Scheduled Sunday 8:00 pm IST to Drive/Backups. Schedule configuration does not confirm a successful run; failed runs are not recorded here. Check deployment logs and Drive if the last successful backup is old.</p>
           <Button variant="outline" className="min-h-11" onClick={() => backup.mutate()} disabled={backup.isPending}>
             {backup.isPending ? "Backing up…" : "Backup now"}
           </Button>
@@ -185,10 +189,10 @@ function SettingsInner() {
         <CardContent className="flex flex-col gap-3">
           {settings.data?.hasEnvPassword && (
             <p className="text-sm text-muted-foreground">
-              A password hash is set in APP_PASSWORD_HASH and takes priority. Changing it here stores a fallback hash.
+              The effective password is managed by APP_PASSWORD_HASH in the deployment environment. Change it there and redeploy.
             </p>
           )}
-          <PasswordField
+          {!settings.data?.hasEnvPassword && <><PasswordField
             id="new-password"
             placeholder="New password (6+ characters)"
             value={password}
@@ -197,7 +201,7 @@ function SettingsInner() {
           <Button className="min-h-11 gap-2" variant="outline" onClick={() => save.mutate()} disabled={!password || save.isPending}>
             {save.isPending && <Spinner />}
             Change password
-          </Button>
+          </Button></>}
           <Button className="min-h-11" variant="ghost" onClick={logout}>
             Sign out
           </Button>

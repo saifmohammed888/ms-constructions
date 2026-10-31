@@ -8,7 +8,7 @@ const BS = String.fromCharCode(92);
 // escaped dollar signs (\$2a\$12\$...). Editing tools and dashboards often lose
 // that backslash, which silently mangles the hash and makes every login fail,
 // so undo stray escaping before use. bcrypt hashes never contain a backslash.
-function envPasswordHash() {
+export function envPasswordHash() {
   const raw = process.env.APP_PASSWORD_HASH?.trim();
   if (!raw) return "";
   const cleaned = raw.split(BS).join("");

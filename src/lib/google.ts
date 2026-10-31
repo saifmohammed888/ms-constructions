@@ -171,14 +171,12 @@ export async function getDrive() {
 export async function downloadDriveFile(fileId: string) {
   const drive = await getDrive();
   if (!drive) throw new Error("Google Drive is not connected");
-  const meta = await drive.files.get({
-    fileId,
-    fields: "id,name,mimeType,size",
-  });
-  const media = await drive.files.get(
-    { fileId, alt: "media" },
-    { responseType: "arraybuffer" },
-  );
+  // Metadata and file bytes are independent. Request them together to avoid
+  // adding one Drive network round trip to every uncached preview.
+  const [meta, media] = await Promise.all([
+    drive.files.get({ fileId, fields: "id,name,mimeType,size" }),
+    drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" }),
+  ]);
   const data = media.data as ArrayBuffer;
   return {
     buffer: Buffer.from(data),

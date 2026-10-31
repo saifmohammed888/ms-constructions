@@ -118,8 +118,8 @@ export default function TasksPage() {
         <CardSkeleton rows={4} />
       ) : tasks.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
-          <p className="font-medium">{statusView === "completed" ? "No completed tasks yet" : "No tasks yet"}</p>
-          {statusView !== "completed" && <Button className="mt-4 min-h-11" onClick={() => setOpen(true)}>Add your first task</Button>}
+          <p className="font-medium">{search ? "No tasks match your search" : statusView === "completed" ? "No completed tasks yet" : statusView === "active" && totalTasks > 0 ? "No active tasks" : "No tasks yet"}</p>
+          {statusView !== "completed" && <Button className="mt-4 min-h-11" onClick={() => setOpen(true)}>{totalTasks === 0 ? "Add your first task" : "Add task"}</Button>}
         </div>
       ) : (
         <section className="overflow-hidden rounded-2xl border bg-white p-3 shadow-sm"><TaskTable items={tasks} onToggle={(t) => patch.mutate({ id: t.id, body: { status: t.status === "done" ? "todo" : "done" } })} onView={setDetail} onEdit={(t) => { setEditing(t); setOpen(true); }} onDelete={setPendingDelete} /></section>

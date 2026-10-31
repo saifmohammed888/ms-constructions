@@ -7,6 +7,7 @@ const PUBLIC = [
   "/api/auth/google",
   "/api/auth/google/callback",
   "/api/cron/backup",
+  "/api/cron/daily-log",
 ];
 
 export async function middleware(req: NextRequest) {
