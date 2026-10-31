@@ -161,6 +161,12 @@
 
 @media (max-width: 767px) {
   html, body { overflow-x: hidden; }
+  .agent-mobile-viewport {
+    position: fixed;
+    inset-inline: 0;
+    top: var(--agent-viewport-top, 0px);
+    height: var(--agent-viewport-height, 100dvh);
+  }
   button, a, input, select, textarea { touch-action: manipulation; }
   .table-shell, .overflow-x-auto:has(table), section:has(> div > table) { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
   .table-shell table, .overflow-x-auto:has(table) table, section:has(> div > table) table { min-width: 680px !important; width: max-content; }

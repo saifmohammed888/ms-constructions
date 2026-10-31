@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -43,6 +43,7 @@ export function AppShell({
   projectName: string;
 }) {
   const path = usePathname();
+  const shellRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const prefetchRouteData = useCallback((href: string) => {
@@ -69,10 +70,38 @@ export function AppShell({
   // the conversation owns the full mobile viewport (input flush with the bottom
   // edge, like a native messaging app).
   const immersive = path.startsWith("/agent");
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    const viewport = window.visualViewport;
+    if (!immersive || !shell || !viewport) return;
+
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // A pinch changes visualViewport.scale. Do not resize the layout in
+        // response; the user must remain free to zoom for accessibility.
+        if (Math.abs(viewport.scale - 1) > 0.01) return;
+        shell.style.setProperty("--agent-viewport-height", `${viewport.height}px`);
+        shell.style.setProperty("--agent-viewport-top", `${viewport.offsetTop}px`);
+      });
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      shell.style.removeProperty("--agent-viewport-height");
+      shell.style.removeProperty("--agent-viewport-top");
+    };
+  }, [immersive]);
   return (
     // On the chat route the shell is a locked viewport-height box so the inner
     // pane can size itself exactly and only the message list scrolls.
-    <div className={cn("bg-background text-foreground", immersive ? "h-dvh overflow-hidden" : "min-h-dvh")}>
+    <div ref={shellRef} className={cn("bg-background text-foreground", immersive ? "agent-mobile-viewport h-dvh overflow-hidden" : "min-h-dvh")}>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-white p-5 md:flex md:flex-col">
         <div className="mb-8 px-2">
           <div className="flex items-center gap-2">
@@ -115,7 +144,7 @@ export function AppShell({
         </Link>
       </aside>
 
-      <div className={immersive ? "h-dvh md:flex md:flex-col md:pl-64" : "md:pl-64"}>
+      <div className={immersive ? "h-full md:flex md:flex-col md:pl-64" : "md:pl-64"}>
         <header className={cn("sticky top-0 z-20 min-h-14 shrink-0 items-center justify-between border-b border-black/5 bg-background/90 px-4 py-3 backdrop-blur md:px-8 md:flex", immersive ? "hidden" : "flex")}>
           <div>
             <p className="text-sm font-semibold md:hidden">{projectName}</p>
@@ -131,7 +160,7 @@ export function AppShell({
             The mobile sticky header is hidden there, so the pane is `h-dvh`;
             on desktop it is `flex-1` and takes whatever the header leaves over,
             whatever the header's actual height is (name wrapping included). */}
-        <main className={immersive ? "flex h-dvh min-h-0 flex-col overflow-hidden md:h-auto md:flex-1 md:px-8 md:pb-10 md:pt-5" : "px-4 pb-24 pt-5 md:px-8 md:pb-10"}>{children}</main>
+        <main className={immersive ? "flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:flex-1 md:px-8 md:pb-10 md:pt-5" : "px-4 pb-24 pt-5 md:px-8 md:pb-10"}>{children}</main>
       </div>
 
       {!immersive && (
