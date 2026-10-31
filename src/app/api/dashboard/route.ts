@@ -1,53 +1,35 @@
 import { NextResponse } from "next/server";
-import { getDb, getSettingsRow } from "@/lib/db";
-import { documents, expenses, tasks } from "@/lib/schema";
+import { sql } from "drizzle-orm";
+import { getDb } from "@/lib/db";
 import { lastNMonths, todayIso } from "@/lib/format";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { summarizeExpenses } from "@/lib/expense-summary";
 
 export async function GET() {
   const db = await getDb();
-  // These reads do not depend on each other. Running them concurrently avoids
-  // paying the Neon round-trip latency four times in sequence.
-  const [row, expenseRows, taskRows, documentCategories] = await Promise.all([
-    getSettingsRow(),
-    db
-      .select({
-        id: expenses.id,
-        amount: expenses.amount,
-        category: expenses.category,
-        date: expenses.date,
-        paymentStatus: expenses.paymentStatus,
-        dueDate: expenses.dueDate,
-        notes: expenses.notes,
-      })
-      .from(expenses),
-    db
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        dueDate: tasks.dueDate,
-        status: tasks.status,
-        goalLabel: tasks.goalLabel,
-      })
-      .from(tasks),
-    db.select({ category: documents.category }).from(documents),
-  ]);
+  // One query uses a single pooled connection, avoiding simultaneous cold
+  // TLS connections and repeated network round trips to the database region.
+  const result = await db.execute(sql`
+    SELECT
+      (SELECT json_build_object('projectName', project_name, 'budgetTotal', budget_total, 'budgetByCategory', budget_by_category, 'setupComplete', setup_complete, 'gcalConnected', gcal_connected) FROM settings WHERE id = 1) AS settings,
+      COALESCE((SELECT json_agg(json_build_object('id', id, 'amount', amount, 'category', category, 'date', date, 'paymentStatus', payment_status, 'dueDate', due_date, 'notes', notes)) FROM expenses), '[]'::json) AS expense_rows,
+      COALESCE((SELECT json_agg(json_build_object('id', id, 'title', title, 'dueDate', due_date, 'status', status, 'goalLabel', goal_label)) FROM tasks), '[]'::json) AS task_rows,
+      COALESCE((SELECT json_agg(category) FROM (SELECT DISTINCT category FROM documents) AS categories), '[]'::json) AS document_categories
+  `);
+  type DashboardRow = {
+    settings: { projectName: string; budgetTotal: string | number | null; budgetByCategory: Record<string, number>; setupComplete: boolean; gcalConnected: boolean } | null;
+    expense_rows: { id: string; amount: string | number; category: string; date: string; paymentStatus: string; dueDate: string | null; notes: string | null }[];
+    task_rows: { id: string; title: string; dueDate: string | null; status: string; goalLabel: string | null }[];
+    document_categories: string[];
+  };
+  const rows = Array.isArray(result) ? result : result.rows;
+  const data = rows[0] as unknown as DashboardRow;
+  const row = data.settings;
+  const expenseRows = data.expense_rows;
+  const taskRows = data.task_rows;
 
-  const totalsByCategory = new Map<string, number>(EXPENSE_CATEGORIES.map((category) => [category, 0]));
-  let totalSpent = 0;
-  for (const expense of expenseRows) {
-    const amount = Number(expense.amount);
-    totalSpent += amount;
-    totalsByCategory.set(expense.category, (totalsByCategory.get(expense.category) ?? 0) + amount);
-  }
-  const byCategory = EXPENSE_CATEGORIES.map((category) => ({ category, amount: totalsByCategory.get(category) ?? 0 }));
   const months = lastNMonths(6);
-  const totalsByMonth = new Map(months.map((month) => [month, 0]));
-  for (const expense of expenseRows) {
-    const month = expense.date.slice(0, 7);
-    if (totalsByMonth.has(month)) totalsByMonth.set(month, (totalsByMonth.get(month) ?? 0) + Number(expense.amount));
-  }
-  const monthly = months.map((month) => ({ month, amount: totalsByMonth.get(month) ?? 0 }));
+  const totals = summarizeExpenses(expenseRows, EXPENSE_CATEGORIES, months);
   const today = todayIso();
   const weekAhead = new Date(`${today}T00:00:00+05:30`);
   weekAhead.setDate(weekAhead.getDate() + 7);
@@ -59,7 +41,7 @@ export async function GET() {
   const thisWeek = [...overdue, ...upcoming].slice(0, 5);
   const recent = [...expenseRows].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 3);
   const duePayments = expenseRows.filter((e) => e.paymentStatus === "due").sort((a, b) => (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1).slice(0, 5);
-  const presentCategories = new Set(documentCategories.map((document) => document.category));
+  const presentCategories = new Set(data.document_categories);
   const missingDocuments = ["drawings", "approvals", "contracts"].filter((category) => !presentCategories.has(category));
   const currentStage = taskRows.find((task) => task.status !== "done" && task.goalLabel)?.goalLabel ?? "Planning & coordination";
 
@@ -67,9 +49,12 @@ export async function GET() {
     projectName: row?.projectName ?? "My Construction",
     budgetTotal: row?.budgetTotal ? Number(row.budgetTotal) : null,
     budgetByCategory: row?.budgetByCategory ?? {},
-    totalSpent,
-    byCategory,
-    monthly,
+    totalSpent: totals.paid,
+    totalDue: totals.due,
+    unclassifiedTotal: totals.unclassified,
+    recordedTotal: totals.recordedTotal,
+    byCategory: totals.byCategory,
+    monthly: totals.monthly,
     thisWeek,
     overdueCount: overdue.length,
     recent,

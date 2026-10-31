@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
 import { documents, projects, siteUpdateDocuments, siteUpdates } from "@/lib/schema";
@@ -68,9 +68,9 @@ export async function POST(req: NextRequest) {
   const projectId = await defaultProjectId();
   if (!projectId) return jsonError("No project configured", 400);
   const db = await getDb();
-  const [row] = await db
-    .insert(siteUpdates)
-    .values({
+  const row = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`);
+    const data = {
       projectId,
       date: parsed.data.date,
       workCompleted: parsed.data.workCompleted,
@@ -79,13 +79,18 @@ export async function POST(req: NextRequest) {
       blockers: parsed.data.blockers || null,
       materialsReceived: parsed.data.materialsReceived || null,
       notes: parsed.data.notes || null,
-      status: parsed.data.status || "normal",
-    })
-    .returning();
-  const documentIds = [...new Set(parsed.data.documentIds ?? [])];
-  if (documentIds.length) {
-    await db.insert(siteUpdateDocuments).values(documentIds.map((documentId) => ({ siteUpdateId: row.id, documentId }))).onConflictDoNothing();
-  }
+      status: parsed.data.status && parsed.data.status !== "auto_generated" ? parsed.data.status : "normal",
+    };
+    // A manually submitted update replaces the generated placeholder for this
+    // date, including when the scheduled task won the lock a moment earlier.
+    const [placeholder] = await tx.select({ id: siteUpdates.id }).from(siteUpdates).where(and(eq(siteUpdates.projectId, projectId), eq(siteUpdates.date, data.date), eq(siteUpdates.status, "auto_generated"))).limit(1);
+    const [created] = placeholder
+      ? await tx.update(siteUpdates).set(data).where(eq(siteUpdates.id, placeholder.id)).returning()
+      : await tx.insert(siteUpdates).values(data).returning();
+    const documentIds = [...new Set(parsed.data.documentIds ?? [])];
+    if (documentIds.length) await tx.insert(siteUpdateDocuments).values(documentIds.map((documentId) => ({ siteUpdateId: created.id, documentId }))).onConflictDoNothing();
+    return created;
+  });
   const [withDocs] = await logsWithDocuments([row]);
   return NextResponse.json(withDocs, { status: 201 });
 }

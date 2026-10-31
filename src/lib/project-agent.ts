@@ -4,6 +4,7 @@ import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getAgentDb, getAgentSettingsRow } from "@/lib/db";
 import { contacts, documents, expenses, tasks } from "@/lib/schema";
 import { todayIso } from "@/lib/format";
+import { summarizeExpenses } from "@/lib/expense-summary";
 
 const emptyInput = z.object({});
 
@@ -15,12 +16,13 @@ export function projectTools() {
       execute: async () => {
         const db = await getAgentDb();
         const settings = await getAgentSettingsRow();
-        const rows = await db.select({ amount: expenses.amount }).from(expenses);
+        const rows = await db.select({ amount: expenses.amount, paymentStatus: expenses.paymentStatus, category: expenses.category, date: expenses.date }).from(expenses);
         const openTasks = await db.select({ title: tasks.title, dueDate: tasks.dueDate, status: tasks.status }).from(tasks).where(eq(tasks.status, "todo")).limit(10);
         return {
           projectName: settings?.projectName ?? "My Construction",
           budget: settings?.budgetTotal ? Number(settings.budgetTotal) : null,
-          spent: rows.reduce((sum, row) => sum + Number(row.amount), 0),
+          spent: summarizeExpenses(rows, [], []).paid,
+          due: summarizeExpenses(rows, [], []).due,
           openTasks,
           googleConnected: Boolean(settings?.googleRefreshToken),
         };

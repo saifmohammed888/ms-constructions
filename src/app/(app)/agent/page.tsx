@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, MessageSquare, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, MessageSquare, Trash2 } from "lucide-react";
+import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -161,6 +162,7 @@ export default function AgentPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const nearBottomRef = useRef(true);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -191,6 +193,12 @@ export default function AgentPage() {
   // the first client render, so React doesn't report a hydration mismatch.
   useEffect(() => {
     const local = loadStoredHistory();
+    let cancelled = false;
+    // Show locally saved messages immediately while the server copy loads.
+    // Do not mark history loaded yet: that would persist a partial merge.
+    queueMicrotask(() => {
+      if (!cancelled) setMessages((current) => mergeHistory(local, current));
+    });
     const serverCopy = (async () => {
       try {
         const res = await fetch("/api/agent", { cache: "no-store" });
@@ -209,10 +217,11 @@ export default function AgentPage() {
       }
     })();
 
-    let cancelled = false;
     void serverCopy.then((merged) => {
       if (cancelled) return;
-      setMessages(merged);
+      // A question can be sent while the history request is in flight. Keep
+      // any messages added during that request when reconciling the response.
+      setMessages((current) => mergeHistory(merged, current));
       setHistoryLoaded(true);
     });
     return () => {
@@ -221,7 +230,7 @@ export default function AgentPage() {
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    if (nearBottomRef.current) scrollToBottom();
   }, [messages, pending, scrollToBottom]);
 
   useEffect(() => {
@@ -250,6 +259,7 @@ export default function AgentPage() {
 
     // Optimistic: show the message immediately.
     const optimistic: PendingMessage = { id: `pending-${crypto.randomUUID()}`, content: question };
+    nearBottomRef.current = true;
     setPending(optimistic);
     setInput("");
     setError("");
@@ -313,7 +323,6 @@ export default function AgentPage() {
     } finally {
       setPending(null);
       setLoading(false);
-      inputRef.current?.focus();
     }
   }
 
@@ -351,21 +360,22 @@ export default function AgentPage() {
     // - The shell drops its chrome on this route on mobile, so nothing overlaps.
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:pt-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/" aria-label="Back to dashboard" className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-zinc-600 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 md:hidden"><ArrowLeft className="size-5" /></Link>
           <span className="flex size-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
             AI
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Project Agent</p>
             <p className="text-xs text-muted-foreground">
-              {loading ? "Working…" : historyLoaded ? "Read-only project data · online" : "Loading chat history…"}
+              {loading ? "Working…" : historyLoaded ? "Project assistant" : "Loading chat history…"}
             </p>
           </div>
         </div>
         <button
           type="button"
           onClick={() => setConfirmClear(true)}
-          disabled={clearing || messages.length === 0}
+          disabled={clearing || loading || !historyLoaded || messages.length === 0}
           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-destructive disabled:opacity-40 disabled:hover:border-zinc-200 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           aria-label="Clear chat"
           title="Clear chat"
@@ -378,9 +388,10 @@ export default function AgentPage() {
       <div
         ref={scrollRef}
         aria-live="polite"
+        onScroll={(event) => { const el = event.currentTarget; nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120; }}
         className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4 [-webkit-overflow-scrolling:touch]"
       >
-        {messages.length === 0 && !pending && !loading && (
+        {historyLoaded && messages.length === 0 && !pending && !loading && (
           <div className="mx-auto mt-6 max-w-sm rounded-xl bg-white/80 px-4 py-3 text-center text-sm text-muted-foreground shadow-sm">
             <MessageSquare className="mx-auto mb-2 size-5" />
             Ask about expenses, tasks, contacts, documents, or site updates.
@@ -453,11 +464,10 @@ export default function AgentPage() {
             }}
             rows={1}
             maxLength={500}
-            disabled={loading}
             enterKeyHint="send"
             placeholder="Type a message…"
             aria-label="Message the project agent"
-            className="max-h-36 min-h-11 flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60 md:text-sm"
+            className="max-h-36 min-h-11 min-w-0 flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base outline-none focus:border-emerald-500 focus:bg-white"
           />
           <button
             type="submit"

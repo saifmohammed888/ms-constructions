@@ -34,8 +34,8 @@ const trackers = {
   quotations: {
     title: "Quotation",
     subtitle: "Compare vendor quotes and the final decision.",
-    fields: ["category", "vendor", "finalQuotation", "status"],
-    columns: ["category", "vendor", "finalQuotation", "status"],
+    fields: ["category", "vendor", "finalQuotation", "quoteBasis", "unit", "taxTerms", "transportTerms", "status"],
+    columns: ["category", "vendor", "finalQuotation", "quoteBasis", "unit", "taxTerms", "transportTerms", "status"],
   },
 } as const;
 
@@ -57,6 +57,10 @@ const labels: Record<Field, string> = {
   category: "Category",
   vendor: "Vendor",
   finalQuotation: "Final quote",
+  quoteBasis: "Rate or total",
+  unit: "Unit",
+  taxTerms: "Tax",
+  transportTerms: "Transport",
   status: "Status",
 };
 
@@ -202,13 +206,14 @@ function FieldInput({ field, value, onChange }: { field: Field; value: string; o
   if (longFields.has(field)) {
     return <label className="text-sm font-medium">{labels[field]}<textarea className="mt-1.5 min-h-20 w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-primary/30" value={value} onChange={(e) => onChange(e.target.value)} required={field === "reason" || field === "description"} /></label>;
   }
-  return <div><Label>{labels[field]}</Label><Input className="mt-1.5 min-h-11" type={moneyFields.has(field) ? "number" : "text"} value={value} onChange={(e) => onChange(e.target.value)} required={field !== "actual"} /></div>;
+  return <div><Label>{labels[field]}</Label><Input className="mt-1.5 min-h-11" type={moneyFields.has(field) ? "number" : "text"} value={value} onChange={(e) => onChange(e.target.value)} required={!(["actual", "quoteBasis", "unit", "taxTerms", "transportTerms"] as Field[]).includes(field)} /></div>;
 }
 
 function displayValue(field: Field, row: Row) {
   const value = field === "totalSavings" ? row.data.totalSavings : row.data[field];
-  if (moneyFields.has(field)) return formatInr(Number(value ?? 0));
-  return value || "—";
+  if (moneyFields.has(field)) return value === null || value === undefined || value === "" ? "Unknown" : formatInr(Number(value));
+  if (value !== null && value !== undefined && value !== "") return value;
+  return (["quoteBasis", "unit", "taxTerms", "transportTerms"] as Field[]).includes(field) ? "Unknown" : "—";
 }
 
 function titleFromForm(tracker: Tracker, form: Record<string, string>) {

@@ -34,6 +34,8 @@ Without `DATABASE_URL`, the app uses a local Postgres-compatible file database i
 
 Hobby Cron: weekly Sunday 20:00 IST (`30 14 * * 0` UTC) hits `GET /api/cron/backup`.
 
+The daily work-log cron runs at 20:00 UTC (01:30 IST the next day) and creates an **Automatic · review needed** placeholder for the previous India-calendar date only when the shared project has no work log for that date. It lists recorded expenses and document uploads without inferring site activity. A later manual submission replaces the placeholder. The daily-log endpoint is public and can be invoked by anyone; it does not require `CRON_SECRET`. Cron runs only on a deployed production Vercel project, is not guaranteed to run at an exact minute on every plan, and missed executions are not backfilled. Monitor `/api/cron/daily-log` logs for failures. This currently assumes the app's existing single shared project.
+
 ## Restore
 
 If the app is gone, documents and calendar events remain in Google. Structured data is in Drive `Backups/backup-YYYY-MM-DD.zip`.
