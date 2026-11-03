@@ -149,11 +149,11 @@ export default function MorePage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">More</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">More</h1>
           <p className="text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
         <Button className="min-h-11" onClick={addEntry}>
-          <Plus className="size-4" /> Add
+          <Plus className="size-4" /> Add entry
         </Button>
       </div>
 

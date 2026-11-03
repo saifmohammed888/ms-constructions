@@ -118,7 +118,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{d.projectName} · {todayLabel}</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Daily brief</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Daily brief</h1>
           <p className="mt-1 text-sm text-muted-foreground">Stage: {d.currentStage}</p>
         </div>
         <div className="flex gap-2">
