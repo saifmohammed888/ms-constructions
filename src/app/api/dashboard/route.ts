@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { lastNMonths, todayIso } from "@/lib/format";
+import { todayIso } from "@/lib/format";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
-import { summarizeExpenses } from "@/lib/expense-summary";
+import { buildInsights, type InsightExpense, type InsightLog, type InsightTask } from "@/lib/dashboard-insights";
 
 export async function GET() {
   const db = await getDb();
@@ -12,56 +12,44 @@ export async function GET() {
   const result = await db.execute(sql`
     SELECT
       (SELECT json_build_object('projectName', project_name, 'budgetTotal', budget_total, 'budgetByCategory', budget_by_category, 'setupComplete', setup_complete, 'gcalConnected', gcal_connected) FROM settings WHERE id = 1) AS settings,
-      COALESCE((SELECT json_agg(json_build_object('id', id, 'amount', amount, 'category', category, 'date', date, 'paymentStatus', payment_status, 'dueDate', due_date, 'notes', notes)) FROM expenses), '[]'::json) AS expense_rows,
-      COALESCE((SELECT json_agg(json_build_object('id', id, 'title', title, 'dueDate', due_date, 'status', status, 'goalLabel', goal_label)) FROM tasks), '[]'::json) AS task_rows,
+      COALESCE((SELECT json_agg(json_build_object(
+        'id', e.id, 'amount', e.amount, 'category', e.category, 'date', e.date, 'paymentStatus', e.payment_status, 'dueDate', e.due_date, 'notes', e.notes,
+        'contactName', c.name,
+        'hasReceipt', (e.receipt_doc_id IS NOT NULL OR EXISTS (SELECT 1 FROM expense_documents ed WHERE ed.expense_id = e.id))
+      )) FROM expenses e LEFT JOIN contacts c ON c.id = e.contact_id), '[]'::json) AS expense_rows,
+      COALESCE((SELECT json_agg(json_build_object('id', id, 'title', title, 'dueDate', due_date, 'status', status, 'goalLabel', goal_label, 'priority', priority, 'completedAt', completed_at)) FROM tasks), '[]'::json) AS task_rows,
+      COALESCE((SELECT json_agg(json_build_object('id', id, 'date', date, 'status', status, 'workCompleted', work_completed, 'workInProgress', work_in_progress, 'workPlanned', work_planned, 'blockers', blockers))
+        FROM (SELECT * FROM site_updates ORDER BY date DESC, created_at DESC LIMIT 90) AS recent_logs), '[]'::json) AS log_rows,
       COALESCE((SELECT json_agg(category) FROM (SELECT DISTINCT category FROM documents) AS categories), '[]'::json) AS document_categories
   `);
   type DashboardRow = {
-    settings: { projectName: string; budgetTotal: string | number | null; budgetByCategory: Record<string, number>; setupComplete: boolean; gcalConnected: boolean } | null;
-    expense_rows: { id: string; amount: string | number; category: string; date: string; paymentStatus: string; dueDate: string | null; notes: string | null }[];
-    task_rows: { id: string; title: string; dueDate: string | null; status: string; goalLabel: string | null }[];
+    settings: { projectName: string; budgetTotal: string | number | null; budgetByCategory: Record<string, number> | null; setupComplete: boolean; gcalConnected: boolean } | null;
+    expense_rows: InsightExpense[];
+    task_rows: InsightTask[];
+    log_rows: InsightLog[];
     document_categories: string[];
   };
   const rows = Array.isArray(result) ? result : result.rows;
   const data = rows[0] as unknown as DashboardRow;
   const row = data.settings;
-  const expenseRows = data.expense_rows;
-  const taskRows = data.task_rows;
-
-  const months = lastNMonths(6);
-  const totals = summarizeExpenses(expenseRows, EXPENSE_CATEGORIES, months);
   const today = todayIso();
-  const weekAhead = new Date(`${today}T00:00:00+05:30`);
-  weekAhead.setDate(weekAhead.getDate() + 7);
-  const weekIso = weekAhead.toISOString().slice(0, 10);
-  const overdue = taskRows.filter((t) => t.status !== "done" && t.dueDate && t.dueDate < today);
-  const upcoming = taskRows.filter(
-    (t) => t.status !== "done" && t.dueDate && t.dueDate >= today && t.dueDate <= weekIso,
-  );
-  const thisWeek = [...overdue, ...upcoming].slice(0, 5);
-  const recent = [...expenseRows].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 3);
-  const duePayments = expenseRows.filter((e) => e.paymentStatus === "due").sort((a, b) => (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1).slice(0, 5);
-  const presentCategories = new Set(data.document_categories);
-  const missingDocuments = ["drawings", "approvals", "contracts"].filter((category) => !presentCategories.has(category));
-  const currentStage = taskRows.find((task) => task.status !== "done" && task.goalLabel)?.goalLabel ?? "Planning & coordination";
 
-  return NextResponse.json({
-    projectName: row?.projectName ?? "My Construction",
+  const insights = buildInsights({
+    today,
     budgetTotal: row?.budgetTotal ? Number(row.budgetTotal) : null,
     budgetByCategory: row?.budgetByCategory ?? {},
-    totalSpent: totals.paid,
-    totalDue: totals.due,
-    unclassifiedTotal: totals.unclassified,
-    recordedTotal: totals.recordedTotal,
-    byCategory: totals.byCategory,
-    monthly: totals.monthly,
-    thisWeek,
-    overdueCount: overdue.length,
-    recent,
-    duePayments,
-    missingDocuments,
-    currentStage,
+    categories: EXPENSE_CATEGORIES,
+    expenses: data.expense_rows,
+    tasks: data.task_rows,
+    logs: data.log_rows,
+    documentCategories: data.document_categories,
+  });
+
+  return NextResponse.json({
+    today,
+    projectName: row?.projectName ?? "My Construction",
     setupComplete: row?.setupComplete ?? false,
     gcalConnected: row?.gcalConnected ?? false,
+    ...insights,
   });
 }
