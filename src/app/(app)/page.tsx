@@ -113,11 +113,12 @@ export default function DashboardPage() {
   const todayLabel = formatDate(d.today);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-5">
+    // Bottom padding on mobile keeps the last cards clear of the floating "+" button.
+    <div className="mx-auto flex max-w-5xl flex-col gap-5 pb-24 md:pb-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{d.projectName} · {todayLabel}</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Daily brief</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Daily brief</h1>
           <p className="mt-1 text-sm text-muted-foreground">Stage: {d.currentStage}</p>
         </div>
         <div className="flex gap-2">

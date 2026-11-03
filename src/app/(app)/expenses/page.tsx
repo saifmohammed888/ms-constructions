@@ -100,7 +100,7 @@ function ExpensesInner() {
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Expenses</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Expenses</h1>
           <p className="text-sm text-muted-foreground">
             Filtered total {formatInr(list.data?.total ?? 0)}
           </p>
@@ -115,7 +115,7 @@ function ExpensesInner() {
             CSV
           </a>
           <Button className="min-h-11" onClick={() => { setEditing(null); setOpen(true); }}>
-            <Plus className="size-4" /> Add
+            <Plus className="size-4" /> Add expense
           </Button>
         </div>
       </div>
