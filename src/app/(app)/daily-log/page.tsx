@@ -140,6 +140,7 @@ export default function DailyLogPage() {
       setEditing(null);
       setForm(emptyForm());
       qc.invalidateQueries({ queryKey: ["daily-logs"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["documents"] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -154,6 +155,7 @@ export default function DailyLogPage() {
       toast.success("Work log deleted");
       setPendingDelete(null);
       qc.invalidateQueries({ queryKey: ["daily-logs"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
