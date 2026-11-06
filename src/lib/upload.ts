@@ -84,6 +84,40 @@ export function filesFromInput(input: HTMLInputElement | null): File[] {
   return Array.from(input?.files ?? []).map((file, index) => normalizeUploadFile(file, index));
 }
 
+/**
+ * Vercel caps a serverless request body at 4.5 MB (multipart overhead included),
+ * so anything bigger returns 413 before our code runs. Keep a safety margin.
+ */
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+/** Photos above this are re-encoded smaller; below it we send the original. */
+const SHRINK_ABOVE_BYTES = 3 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2800;
+
+/**
+ * Re-encode a large phone photo as JPEG at a sensible resolution. Returns the
+ * original file if the browser cannot decode it (for example HEIC outside Safari).
+ */
+async function shrinkImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    if (!blob || blob.size >= file.size) return file;
+    const name = `${file.name.replace(/\.[a-z0-9]+$/i, "") || "photo"}.jpg`;
+    return new File([blob], name, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch {
+    return file;
+  }
+}
+
 export type UploadOutcome<T> = { ok: true; data: T } | { ok: false; file: File; error: string };
 
 async function readJson(res: Response): Promise<unknown> {
@@ -116,9 +150,19 @@ export async function uploadDocument<T = unknown>(
   const retries = opts.retries ?? 1;
   let lastError = "Upload failed";
 
+  const payload = file.size > SHRINK_ABOVE_BYTES ? await shrinkImage(file) : file;
+  if (payload.size > MAX_REQUEST_BYTES) {
+    const mb = (payload.size / (1024 * 1024)).toFixed(1);
+    return {
+      ok: false,
+      file,
+      error: `${file.name} is ${mb} MB and is too large to upload (limit about 4 MB). Use a smaller photo, or export the PDF at a lower resolution.`,
+    };
+  }
+
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const fd = new FormData();
-    fd.set("file", file);
+    fd.set("file", payload);
     fd.set("category", opts.category ?? "misc");
     if (opts.tags) fd.set("tags", opts.tags);
 

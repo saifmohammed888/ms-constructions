@@ -97,7 +97,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(row, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("Document upload failed", err);
-    const msg = err instanceof Error ? err.message : "Upload failed";
-    return jsonError(msg.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]"), 400);
+    const raw = err instanceof Error ? err.message : "Upload failed";
+    // Google rejects the saved refresh token when access was revoked or expired.
+    if (/invalid_grant|Google Drive is not connected/i.test(raw)) {
+      return jsonError("Google Drive is disconnected. Reconnect Google in Settings, then upload again.", 400);
+    }
+    return jsonError(raw.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]"), 400);
   }
 }
