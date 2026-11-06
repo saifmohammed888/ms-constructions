@@ -176,6 +176,7 @@ export function AppShell({
                 <QuickLink href="/daily-log" label="Add work log" onClick={() => setQuickAddOpen(false)} />
                 <QuickLink href="/documents" label="Upload document" onClick={() => setQuickAddOpen(false)} />
                 <QuickLink href="/documents" label="Add site photo" onClick={() => setQuickAddOpen(false)} />
+                <QuickLink href="/presentation" label="Presentation" onClick={() => setQuickAddOpen(false)} />
                 <QuickLink href="/contacts" label="Contacts" onClick={() => setQuickAddOpen(false)} />
                 <QuickLink href="/settings" label="Settings" onClick={() => setQuickAddOpen(false)} />
               </div>
