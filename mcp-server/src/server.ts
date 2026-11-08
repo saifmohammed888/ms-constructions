@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import { pool, query } from "./db.js";
+import { ALLOWED_MIME_TYPES, DOCUMENT_CATEGORIES, decodeBase64, downloadFile, saveFile, validateImportUrl } from "./files.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const API_KEY = process.env.MCP_API_KEY;
@@ -12,6 +13,13 @@ const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
 const nullableText = z.string().max(2_000).nullable().optional();
 const expenseCategories = z.enum(["land", "approvals", "foundation", "structure", "electrical", "plumbing", "finishing", "labour", "materials", "misc"]);
+const fileAttachment = {
+  name: z.string().min(1).max(180),
+  category: z.enum(DOCUMENT_CATEGORIES).default("misc"),
+  tags: z.array(z.string().min(1).max(80)).max(20).default([]),
+  expenseId: uuid.optional(),
+  workLogId: uuid.optional(),
+};
 
 function result(data: unknown) {
   const structuredContent = Array.isArray(data) ? { items: data } : (data as Record<string, unknown>);
@@ -164,6 +172,28 @@ function createAppMcpServer() {
   });
   mcp.registerTool("work_log_update", { title: "Update work log", description: "Updates only the supplied fields on a daily work log.", inputSchema: logInput.partial().extend({ id: uuid }), annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false } }, async ({ id, ...patch }) => updateRow("site_updates", id, patch, { workCompleted: "work_completed", workInProgress: "work_in_progress", workPlanned: "work_planned", workerCount: "worker_count", materialsReceived: "materials_received", floorArea: "floor_area" }));
 
+  mcp.registerTool("file_upload", {
+    title: "Upload one file",
+    description: "Uploads one base64-encoded image, PDF, Word, or Excel file to Google Drive and optionally attaches it to one expense or work log. Maximum 10 MB; no overwrite or delete.",
+    inputSchema: z.object({ ...fileAttachment, mimeType: z.enum(ALLOWED_MIME_TYPES), fileBase64: z.string().min(4) }),
+    annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async ({ fileBase64, ...input }) => {
+    try { return result(await saveFile(decodeBase64(fileBase64), input)); }
+    catch (error) { return failure(error); }
+  });
+
+  mcp.registerTool("file_import_url", {
+    title: "Import one file from HTTPS",
+    description: "Downloads one file from an allow-listed HTTPS hostname, uploads it to Google Drive, and optionally attaches it to one expense or work log. Maximum 10 MB; redirects, private networks, overwrite, and delete are blocked.",
+    inputSchema: z.object({ ...fileAttachment, url: z.string().url() }),
+    annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async ({ url, ...input }) => {
+    try {
+      const downloaded = await downloadFile(await validateImportUrl(url));
+      return result(await saveFile(downloaded.buffer, { ...input, mimeType: downloaded.mimeType }));
+    } catch (error) { return failure(error); }
+  });
+
   return mcp;
 }
 
@@ -189,7 +219,8 @@ async function updateRow(table: "tasks" | "expenses" | "site_updates", id: strin
   } catch (error) { return failure(error); }
 }
 
-const mcpHandler = createMcpHandler(() => createAppMcpServer());
+const MAX_MCP_BODY_BYTES = 16 * 1024 * 1024;
+const mcpHandler = createMcpHandler(() => createAppMcpServer(), { maxRequestBodySize: MAX_MCP_BODY_BYTES });
 
 function authorized(req: IncomingMessage) {
   const supplied = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
@@ -201,7 +232,13 @@ async function toWebRequest(req: IncomingMessage) {
   const origin = `http://${req.headers.host || "localhost"}`;
   const chunks: Buffer[] = [];
   if (req.method !== "GET" && req.method !== "HEAD") {
-    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    let size = 0;
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > MAX_MCP_BODY_BYTES) throw new Error("MCP request body exceeds 16 MB");
+      chunks.push(buffer);
+    }
   }
   const body = chunks.length ? Buffer.concat(chunks) : undefined;
   return new Request(new URL(req.url || "/", origin), { method: req.method, headers: req.headers as HeadersInit, body });

@@ -13,3 +13,11 @@ services:
         sync: false
       - key: MCP_API_KEY
         generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MCP_IMPORT_HOSTS
+        sync: false
