@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Camera, Check, Download, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -152,7 +152,23 @@ export default function DocumentsPage() {
     },
   });
 
-  const allDocuments = list.data ?? [];
+  const allDocuments = useMemo(() => list.data ?? [], [list.data]);
+
+  // Previous/next move through the list in the order it is shown.
+  const previewIndex = preview ? allDocuments.findIndex((d) => d.id === preview.id) : -1;
+  const stepPreview = (step: 1 | -1) => {
+    const target = allDocuments[previewIndex + step];
+    if (previewIndex >= 0 && target) setPreview(target);
+  };
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") { const t = allDocuments[previewIndex + 1]; if (t) setPreview(t); }
+      else if (e.key === "ArrowLeft") { const t = allDocuments[previewIndex - 1]; if (t) setPreview(t); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview, previewIndex, allDocuments]);
 
   const downloadDocument = async (doc: Doc) => {
     try {
@@ -337,6 +353,15 @@ export default function DocumentsPage() {
           </DialogHeader>
           {preview && (
             <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="outline" className="min-h-11" onClick={() => stepPreview(-1)} disabled={previewIndex <= 0} aria-label="Previous document">
+                  <ChevronLeft className="size-4" /> Previous
+                </Button>
+                <span className="text-sm text-muted-foreground" aria-live="polite">{previewIndex + 1} of {allDocuments.length}</span>
+                <Button variant="outline" className="min-h-11" onClick={() => stepPreview(1)} disabled={previewIndex < 0 || previewIndex >= allDocuments.length - 1} aria-label="Next document">
+                  Next <ChevronRight className="size-4" />
+                </Button>
+              </div>
               <FileViewer doc={preview} />
               <div className="flex flex-wrap gap-2">
                 {preview.webViewLink && (
