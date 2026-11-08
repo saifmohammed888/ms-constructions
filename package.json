@@ -29,6 +29,7 @@
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "googleapis": "^176.0.0",
+    "heic-convert": "^2.1.0",
     "jose": "^6.2.10",
     "jszip": "^3.10.1",
     "lucide-react": "^1.34.0",

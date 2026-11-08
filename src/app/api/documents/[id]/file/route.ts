@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { documents } from "@/lib/schema";
 import { downloadDriveFile } from "@/lib/google";
 import { jsonError } from "@/lib/http";
+import { HEIC_TYPES, heicToJpeg } from "@/lib/heic";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -54,13 +55,23 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const file = await downloadDriveFile(existing.driveFileId);
     const disposition = req.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline";
     const safeName = existing.name.replace(/["\r\n]/g, "_");
-    const contentType = contentTypeFor(file.mimeType || existing.mimeType, existing.name);
+    let contentType = contentTypeFor(file.mimeType || existing.mimeType, existing.name);
+    let body: Buffer = file.buffer;
+    // Phone HEIC photos are shown as JPEG; a download still returns the original file.
+    if (HEIC_TYPES.has(contentType) && disposition === "inline") {
+      try {
+        body = await heicToJpeg(file.buffer);
+        contentType = "image/jpeg";
+      } catch (convertErr) {
+        console.error("HEIC conversion failed", id, convertErr);
+      }
+    }
     // Uploads to Drive keep the new file private, so bytes always come through here.
     // Images can be cached briefly to make Work Log grids snappy on mobile.
-    return new NextResponse(new Uint8Array(file.buffer), {
+    return new NextResponse(new Uint8Array(body), {
       headers: {
         "Content-Type": contentType,
-        "Content-Length": String(file.buffer.byteLength),
+        "Content-Length": String(body.byteLength),
         "Content-Disposition": `${disposition}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(existing.name)}`,
         "Cache-Control": contentType.startsWith("image/") ? "private, max-age=3600" : "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
