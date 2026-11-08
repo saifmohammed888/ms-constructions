@@ -37,6 +37,12 @@ const trackers = {
     fields: ["category", "vendor", "finalQuotation", "quoteBasis", "unit", "taxTerms", "transportTerms", "status"],
     columns: ["category", "vendor", "finalQuotation", "quoteBasis", "unit", "taxTerms", "transportTerms", "status"],
   },
+  issues: {
+    title: "Issues",
+    subtitle: "Track problems faced on site and how critical they are.",
+    fields: ["title", "note", "criticality", "category"],
+    columns: ["title", "criticality", "category", "note"],
+  },
 } as const;
 
 type Tracker = keyof typeof trackers;
@@ -62,11 +68,16 @@ const labels: Record<Field, string> = {
   taxTerms: "Tax",
   transportTerms: "Transport",
   status: "Status",
+  note: "Note",
+  criticality: "Criticality",
 };
 
 const moneyFields = new Set<Field>(["amount", "estimated", "actual", "totalSavings", "finalQuotation"]);
-const longFields = new Set<Field>(["reason", "lesson", "description"]);
-const quoteStatuses = ["Pending", "Selected", "Rejected"] as const;
+const longFields = new Set<Field>(["reason", "lesson", "description", "note"]);
+const selectOptions: Partial<Record<Field, readonly string[]>> = {
+  status: ["Pending", "Selected", "Rejected"],
+  criticality: ["Low", "Medium", "High", "Critical"],
+};
 
 export default function MorePage() {
   const qc = useQueryClient();
@@ -190,7 +201,7 @@ export default function MorePage() {
 
       <ResponsiveForm open={open} onOpenChange={setOpen} title={editing ? `Edit ${config.title}` : `Add ${config.title}`}>
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          {config.fields.map((field) => <FieldInput key={field} field={field} value={form[field] ?? ""} onChange={(value) => setForm({ ...form, [field]: value })} />)}
+          {config.fields.map((field) => <FieldInput key={field} field={field} optional={tracker === "issues" && field === "category"} value={form[field] ?? ""} onChange={(value) => setForm({ ...form, [field]: value })} />)}
           <Button type="submit" className="min-h-11" disabled={save.isPending}>{save.isPending ? "Saving..." : editing ? "Save" : "Add"}</Button>
         </form>
       </ResponsiveForm>
@@ -199,14 +210,15 @@ export default function MorePage() {
   );
 }
 
-function FieldInput({ field, value, onChange }: { field: Field; value: string; onChange: (value: string) => void }) {
-  if (field === "status") {
-    return <div><Label>{labels[field]}</Label><Select value={value || "Pending"} onValueChange={(next) => next && onChange(next)}><SelectTrigger className="mt-1.5 min-h-11"><SelectValue /></SelectTrigger><SelectContent>{quoteStatuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div>;
+function FieldInput({ field, value, optional = false, onChange }: { field: Field; value: string; optional?: boolean; onChange: (value: string) => void }) {
+  const options = selectOptions[field];
+  if (options) {
+    return <div><Label>{labels[field]}</Label><Select value={value || options[0]} onValueChange={(next) => next && onChange(next)}><SelectTrigger className="mt-1.5 min-h-11"><SelectValue /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>;
   }
   if (longFields.has(field)) {
     return <label className="text-sm font-medium">{labels[field]}<textarea className="mt-1.5 min-h-20 w-full rounded-xl border bg-white px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-primary/30" value={value} onChange={(e) => onChange(e.target.value)} required={field === "reason" || field === "description"} /></label>;
   }
-  return <div><Label>{labels[field]}</Label><Input className="mt-1.5 min-h-11" type={moneyFields.has(field) ? "number" : "text"} value={value} onChange={(e) => onChange(e.target.value)} required={!(["actual", "quoteBasis", "unit", "taxTerms", "transportTerms"] as Field[]).includes(field)} /></div>;
+  return <div><Label>{labels[field]}</Label><Input className="mt-1.5 min-h-11" type={moneyFields.has(field) ? "number" : "text"} value={value} onChange={(e) => onChange(e.target.value)} required={!optional && !(["actual", "quoteBasis", "unit", "taxTerms", "transportTerms"] as Field[]).includes(field)} /></div>;
 }
 
 function displayValue(field: Field, row: Row) {
@@ -220,10 +232,12 @@ function titleFromForm(tracker: Tracker, form: Record<string, string>) {
   if (tracker === "decisions") return form.where || "Wrong spending";
   if (tracker === "savings") return form.description || "Savings";
   if (tracker === "learnings") return form.title || "Learning";
+  if (tracker === "issues") return form.title || "Issue";
   return [form.category, form.vendor].filter(Boolean).join(" · ") || "Quotation";
 }
 
 function defaultForm(tracker: Tracker): Record<string, string> {
   if (tracker === "quotations") return { status: "Pending" };
+  if (tracker === "issues") return { criticality: "Medium" };
   return {};
 }

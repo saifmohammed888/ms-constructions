@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { projectTrackers } from "@/lib/schema";
 
-const allowed = new Set(["decisions", "learnings", "savings", "quotations"]);
+const allowed = new Set(["decisions", "learnings", "savings", "quotations", "issues"]);
 
 export async function GET(req: NextRequest) {
   const tracker = req.nextUrl.searchParams.get("tracker") ?? "";
