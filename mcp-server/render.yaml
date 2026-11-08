@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ms-constructions-mcp
+    runtime: node
+    rootDir: mcp-server
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false
+      - key: MCP_API_KEY
+        generateValue: true
