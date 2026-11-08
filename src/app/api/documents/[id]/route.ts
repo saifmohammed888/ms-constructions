@@ -33,6 +33,18 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
   }
 
+  if (parsed.data.name) {
+    // Keep the Drive file name in step with the app name so photos are findable in Drive too.
+    try {
+      const drive = await getDrive();
+      if (drive) {
+        await drive.files.update({ fileId: existing.driveFileId, requestBody: { name: parsed.data.name }, fields: "id" });
+      }
+    } catch {
+      /* metadata still updates */
+    }
+  }
+
   const [row] = await db.update(documents).set(parsed.data).where(eq(documents.id, id)).returning();
   return NextResponse.json(row);
 }

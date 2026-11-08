@@ -57,7 +57,8 @@ export const taskSchema = z.object({
 export const documentPatchSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   category: z.enum(DOC_CATEGORIES).optional(),
-  tags: z.array(z.string().max(40)).optional(),
+  // 80 chars: import source tags look like `src:<44-char Google Photos id>`.
+  tags: z.array(z.string().max(80)).max(30).optional(),
 });
 
 export const settingsSchema = z.object({
