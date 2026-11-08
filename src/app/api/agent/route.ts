@@ -15,7 +15,9 @@ const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY });
 const MAX_QUERY_LENGTH = 4000;
 const DEFAULT_ROW_LIMIT = 30;
 const MAX_ROW_LIMIT = 100;
-const QUERY_TIMEOUT_MS = 10_000;
+// A cold Neon compute can take several seconds to wake; 20s still leaves room
+// inside the route's 60s maxDuration for the model to answer.
+const QUERY_TIMEOUT_MS = 20_000;
 const HISTORY_LIMIT = 300;
 const CONTEXT_MESSAGES = 12;
 
@@ -193,6 +195,20 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+// Connection drops and cold starts are transient. Retrying a SELECT is safe;
+// writes are never retried because a dropped response may still have committed.
+const TRANSIENT_DB_ERROR = /timed out|ECONNRESET|ETIMEDOUT|EPIPE|socket hang up|Connection terminated|terminating connection|connection (?:refused|closed|timeout)|57P01|08006|08001|08003/i;
+
+async function readWithRetry<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof Error) || !TRANSIENT_DB_ERROR.test(error.message)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return run();
+  }
+}
+
 const queryProjectData = tool({
   description:
     "Run a single read-only SELECT / WITH SQL query against the construction project database and return at most 200 rows. Use it for every project fact; never invent data.",
@@ -223,9 +239,11 @@ const queryProjectData = tool({
       const db = await getAgentDb();
       // Wrapping in a subquery means even a statement that slipped past the
       // keyword checks cannot return more than `rowLimit` rows.
-      const result = await withTimeout(
-        db.execute(sql.raw(`SELECT * FROM (${guarded.query}) AS agent_result LIMIT ${rowLimit}`)),
-        QUERY_TIMEOUT_MS,
+      const result = await readWithRetry(() =>
+        withTimeout(
+          db.execute(sql.raw(`SELECT * FROM (${guarded.query}) AS agent_result LIMIT ${rowLimit}`)),
+          QUERY_TIMEOUT_MS,
+        ),
       );
       return {
         rows: Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? []),

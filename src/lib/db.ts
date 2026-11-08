@@ -20,7 +20,11 @@ const SCHEMA_VERSION = 1;
 const databaseConnectionString = databaseUrl();
 const pool = databaseConnectionString ? new Pool({ connectionString: databaseConnectionString }) : null;
 const agentConnectionString = agentDatabaseUrl();
-const agentPool = agentConnectionString ? new Pool({ connectionString: agentConnectionString }) : null;
+// Bounded connect time so a stalled database fails fast with a clear error
+// instead of hanging the agent until the function times out.
+const agentPool = agentConnectionString
+  ? new Pool({ connectionString: agentConnectionString, connectionTimeoutMillis: 15_000, idleTimeoutMillis: 10_000, max: 3 })
+  : null;
 
 // Keep one pool per warm Fluid Compute instance. Vercel closes idle connections
 // safely after each invocation through attachDatabasePool.
