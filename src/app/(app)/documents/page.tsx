@@ -18,7 +18,7 @@ import { DOC_CATEGORIES, DOC_CATEGORY_LABELS, type DocCategory } from "@/lib/con
 import { formatDate } from "@/lib/format";
 import { FileViewer, UploadOverlay } from "@/components/file-viewer";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { uploadDocument, filesFromInput } from "@/lib/upload";
+import { uploadDocuments, filesFromInput } from "@/lib/upload";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
@@ -92,30 +92,20 @@ export default function DocumentsPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const uploadOne = async (file: File, selectedCategory: DocCategory) => {
-    // Normalises camera/gallery output (name + MIME) and retries once on flaky
-    // mobile networks before reporting the failure.
-    const result = await uploadDocument<Doc>(file, { category: selectedCategory });
-    if (!result.ok) throw new Error(result.error);
-    return result.data;
-  };
-
+  // Same helper as Work Log and Expenses: normalised names, one retry on flaky
+  // mobile networks, sequential sends, and the same error wording everywhere.
   const uploadFiles = async (files: File[]) => {
     if (!files.length) return;
     const selectedCategory = activeUploadCategory || "misc";
     setUploadState({ done: 0, total: files.length, failed: 0 });
-    let failed = 0;
-    for (const file of files) {
-      try {
-        await uploadOne(file, selectedCategory);
-      } catch (error) {
-        failed += 1;
-        toast.error(`${file.name}: ${error instanceof Error ? error.message : "Upload failed"}`);
-      }
-      setUploadState((state) => ({ ...state, done: state.done + 1, failed }));
-    }
+    const { uploaded, failed } = await uploadDocuments<Doc>(files, {
+      category: selectedCategory,
+      onProgress: (done) => setUploadState((state) => ({ ...state, done, failed: state.failed })),
+    });
+    for (const item of failed) toast.error(`${item.file.name}: ${item.error}`);
+    setUploadState((state) => ({ ...state, done: files.length, failed: failed.length }));
     await qc.invalidateQueries({ queryKey: ["documents"] });
-    toast.success(`${files.length - failed} file${files.length - failed === 1 ? "" : "s"} uploaded to ${DOC_CATEGORY_LABELS[selectedCategory]}`);
+    if (uploaded.length) toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded to ${DOC_CATEGORY_LABELS[selectedCategory]}`);
     setTimeout(() => setUploadState({ done: 0, total: 0, failed: 0 }), 800);
   };
 

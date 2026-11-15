@@ -10,6 +10,8 @@
  *   retries once on a network failure.
  */
 
+import { EXTENSION_MIME, uploadProblem } from "@/lib/upload-rules";
+
 const MIME_EXTENSION: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/jpg": "jpg",
@@ -25,20 +27,6 @@ const MIME_EXTENSION: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
   "application/pdf": "pdf",
-};
-
-const EXTENSION_MIME: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  gif: "image/gif",
-  heic: "image/heic",
-  heif: "image/heif",
-  avif: "image/avif",
-  bmp: "image/bmp",
-  tiff: "image/tiff",
-  pdf: "application/pdf",
 };
 
 function extensionOf(name: string) {
@@ -147,6 +135,9 @@ export async function uploadDocument<T = unknown>(
   file: File,
   opts: { category?: string; tags?: string; retries?: number } = {},
 ): Promise<UploadOutcome<T>> {
+  // Catch empty, oversized or unsupported files before sending bytes over a radio.
+  const problem = uploadProblem(file);
+  if (problem) return { ok: false, file, error: problem };
   const retries = opts.retries ?? 1;
   let lastError = "Upload failed";
 
