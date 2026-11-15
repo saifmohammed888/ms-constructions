@@ -155,6 +155,7 @@ function labelFolder(cat: DocCategory) {
     receipts: "Receipts",
     photos: "Photos",
     contracts: "Contracts",
+    statements: "Statements",
     bank: "Bank",
     identity: "Identity",
     misc: "Misc",

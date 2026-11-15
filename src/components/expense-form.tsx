@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ResponsiveForm } from "@/components/responsive-form";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ExistingDocumentPicker } from "@/components/existing-document-picker";
 import { Camera, Check, ImagePlus } from "lucide-react";
 import {
   EXPENSE_CATEGORIES,
@@ -85,13 +85,7 @@ export function ExpenseForm({
     });
   }, []);
   const [receiptPickerOpen, setReceiptPickerOpen] = useState(false);
-  const [receiptSearch, setReceiptSearch] = useState("");
   const [selectedReceipts, setSelectedReceipts] = useState<ReceiptDocument[]>(initial?.receiptDocuments ?? []);
-  const documents = useQuery({
-    queryKey: ["documents", "receipt-picker"],
-    enabled: receiptPickerOpen,
-    queryFn: () => json<ReceiptDocument[]>("/api/documents"),
-  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -251,7 +245,7 @@ export function ExpenseForm({
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" className="min-h-10" onClick={() => setReceiptPickerOpen(true)}>
-              Choose existing receipt
+              Choose from Documents
             </Button>
             {selectedReceipts.length > 0 && <span className="max-w-full truncate text-xs text-muted-foreground">{selectedReceipts.length} existing receipt{selectedReceipts.length === 1 ? "" : "s"} selected</span>}
             {receipts.length > 0 && <span className="max-w-full truncate text-xs text-muted-foreground">{receipts.length} file{receipts.length === 1 ? "" : "s"} ready to upload</span>}
@@ -262,19 +256,20 @@ export function ExpenseForm({
           {save.isPending ? "Saving…" : "Save expense"}
         </Button>
       </form>
-      <Dialog open={receiptPickerOpen} onOpenChange={setReceiptPickerOpen}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader><DialogTitle>Choose existing receipt</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Select a file already stored in Documents. It will not be uploaded again.</p>
-          <Input autoFocus className="min-h-11" placeholder="Search by file title" value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} />
-          <div className="flex flex-col gap-2">
-            {receiptSearch.trim() && (documents.data ?? []).filter((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())).slice(0, 12).map((doc) => { const selected = selectedReceipts.some((item) => item.id === doc.id); return <button key={doc.id} type="button" aria-pressed={selected} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : ""}`} onClick={() => { setSelectedReceipts((current) => selected ? current.filter((item) => item.id !== doc.id) : [...current, doc]); setReceipts([]); }}><span className="min-w-0 truncate font-medium">{doc.name}</span><span className={`ml-3 flex shrink-0 items-center gap-1 text-xs font-medium ${selected ? "text-primary" : "text-muted-foreground"}`}>{selected && <Check className="size-4" />}{selected ? "Selected" : "Add"}</span></button>; })}
-            {documents.isLoading && <div className="flex justify-center py-6"><Spinner /></div>}
-            {!documents.isLoading && !receiptSearch.trim() && <p className="py-6 text-center text-sm text-muted-foreground">Start typing to search your Documents.</p>}
-            {!documents.isLoading && receiptSearch.trim() && !(documents.data ?? []).some((doc) => doc.name.toLowerCase().includes(receiptSearch.trim().toLowerCase())) && <p className="py-6 text-center text-sm text-muted-foreground">No matching files found.</p>}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ExistingDocumentPicker
+        open={receiptPickerOpen}
+        onOpenChange={setReceiptPickerOpen}
+        title="Attach from Documents"
+        alreadyAttached={selectedReceipts.map((doc) => doc.id)}
+        onConfirm={(docs) => {
+          // One file can back several expenses (e.g. one PhonePe statement); nothing is copied.
+          setSelectedReceipts((current) => {
+            const known = new Set(current.map((doc) => doc.id));
+            return [...current, ...docs.filter((doc) => !known.has(doc.id)).map((doc) => ({ id: doc.id, name: doc.name, mimeType: doc.mimeType }))];
+          });
+          setReceipts([]);
+        }}
+      />
     </ResponsiveForm>
   );
 }
