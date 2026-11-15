@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Separate service with its own package.json, tsconfig and Render deploy.
+    "mcp-server/**",
   ]),
 ]);
 
