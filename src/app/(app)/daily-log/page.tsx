@@ -236,7 +236,7 @@ export default function DailyLogPage() {
                 {rows.map((log) => (
                   <tr key={log.id}>
                     <td className="font-medium">{formatDate(log.date)}</td>
-                    <td className="max-w-[320px] text-muted-foreground">{log.status === "auto_generated" && <span className="mb-1 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">Automatic · review needed</span>}<span className="line-clamp-2">{log.workCompleted}</span></td>
+                    <td className="max-w-[320px] text-muted-foreground">{log.status === "auto_generated" && <span className="mb-1 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">Automatic · review needed</span>}{isPlaceholderLog(log.workCompleted) ? <span className="italic text-muted-foreground">Not logged yet · tap Edit to add the day</span> : <span className="line-clamp-2">{log.workCompleted}</span>}</td>
                     <td className="max-w-[220px] text-muted-foreground"><span className="line-clamp-1">{log.blockers || "—"}</span></td>
                     <td>{log.documents.length ? `${log.documents.length} image${log.documents.length === 1 ? "" : "s"}` : "—"}</td>
                     <td><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" title="View work log" aria-label="View work log" onClick={() => setDetail(log)}><Eye className="size-4" /></Button><Button variant="ghost" size="icon" title="Edit work log" aria-label="Edit work log" onClick={() => startEdit(log)}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete work log" aria-label="Delete work log" onClick={() => setPendingDelete(log)}><Trash2 className="size-4" /></Button></div></td>
@@ -329,6 +329,11 @@ export default function DailyLogPage() {
       <ConfirmDialog open={Boolean(pendingDelete)} title="Delete work log?" body={pendingDelete ? `This removes the log for ${formatDate(pendingDelete.date)}. Photos stay safe in Documents.` : ""} pending={del.isPending} onCancel={() => setPendingDelete(null)} onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)} />
     </div>
   );
+}
+
+/** Older records were saved with draft text instead of a real entry; treat that as "not logged". */
+function isPlaceholderLog(text: string) {
+  return /^DRAFT\s*[—-]|Please add what happened on site/i.test(text.trim());
 }
 
 function Field({ label, value, onChange, required }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {

@@ -282,7 +282,7 @@ export default function DashboardPage() {
                 <span className="shrink-0 font-medium">{formatInr(p.paid + p.due)}</span>
               </div>
             ))}
-            {m.missingReceiptCount > 0 && <p className="text-xs text-muted-foreground">{m.missingReceiptCount} paid expense{m.missingReceiptCount === 1 ? "" : "s"} without a receipt.</p>}
+            {m.missingReceiptCount > 0 && <p className="text-xs text-muted-foreground">{m.missingReceiptCount} paid expense{m.missingReceiptCount === 1 ? "" : "s"} without a receipt in total, {m.missingReceiptRecentCount} from the last 30 days.</p>}
           </CardContent>
         </Card>
         <Card className="rounded-2xl border-black/5 shadow-sm">

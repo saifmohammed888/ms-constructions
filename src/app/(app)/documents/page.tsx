@@ -278,7 +278,7 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {!settings.data?.driveConnected && (
+      {settings.isSuccess && !settings.data?.driveConnected && (
         <p className="rounded-lg border bg-amber-50 px-3 py-2 text-sm">
           Connect Google in{" "}
           <Link href="/settings" className="underline">

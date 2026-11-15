@@ -258,6 +258,7 @@ export function buildInsights(input: InsightInput) {
       dueSoonTotal: sum(dueSoon),
       dueSoonCount: dueSoon.length,
       missingReceiptCount: missingReceipts.length,
+      missingReceiptRecentCount: missingReceiptsRecent.length,
     },
     monthly: totals.monthly,
     monthlyAverage,
