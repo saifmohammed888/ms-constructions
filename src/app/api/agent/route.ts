@@ -412,8 +412,38 @@ export async function POST(req: NextRequest) {
     // Never persist or return a blank assistant message. When a provider ends
     // after a write-tool call, confirm that completed write instead of showing
     // a misleading generic fallback.
-    const generatedText = cleanAnswer(result.text);
+    let generatedText = cleanAnswer(result.text);
+    // Some runs end right after the database query, before any text is written.
+    // Ask once more, without tools, to write the answer from the results already
+    // fetched, instead of showing the generic fallback.
+    if (!generatedText && result.toolResults.length > 0 && !writeConfirmation(result.toolResults)) {
+      const evidence = JSON.stringify(
+        result.toolResults.map((item) => ({ tool: item.toolName, output: item.output })),
+        (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+      ).slice(0, 12_000);
+      try {
+        const followUp = await generateText({
+          model: deepseek("deepseek-chat"),
+          system:
+            "You answer questions about a construction project in 2-6 short sentences or bullets. " +
+            "Use only the database results provided. If they do not answer the question, say so plainly.",
+          messages: [
+            ...context,
+            { role: "user", content: `Database results for this question (JSON):\n${evidence}\n\nWrite the answer now.` },
+          ],
+          temperature: 0.1,
+          maxOutputTokens: 500,
+        });
+        generatedText = cleanAnswer(followUp.text);
+      } catch (followUpError) {
+        console.error("Agent follow-up failed", followUpError);
+      }
+    }
     const answer = generatedText || writeConfirmation(result.toolResults) || EMPTY_ANSWER_FALLBACK;
+    if (!generatedText && !writeConfirmation(result.toolResults)) {
+      // Visible in Vercel logs so a recurring blank answer can be traced to its cause.
+      console.warn("Agent returned no text", { finishReason: result.finishReason, steps: result.steps.length, tools: result.toolResults.length });
+    }
     const hadText = Boolean(generatedText);
 
     const [assistantRow] = await db
