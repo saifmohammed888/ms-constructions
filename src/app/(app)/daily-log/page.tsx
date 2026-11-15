@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Camera, Eye, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarDays, Camera, Eye, FolderOpen, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ExistingDocumentPicker, type PickableDocument } from "@/components/existing-document-picker";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,16 @@ export default function DailyLogPage() {
   const [date, setDate] = useState("");
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const photoInputs = useRef<{ camera: HTMLInputElement | null; library: HTMLInputElement | null }>({ camera: null, library: null });
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  /** Link files already in Documents; anything already on the log is skipped. */
+  const attachExisting = useCallback((docs: PickableDocument[]) => {
+    setForm((current) => {
+      const known = new Set(current.documents.map((doc) => doc.id));
+      const additions = docs.filter((doc) => !known.has(doc.id)).map((doc) => ({ id: doc.id, name: doc.name, mimeType: doc.mimeType, category: doc.category }));
+      return additions.length ? { ...current, documents: [...current.documents, ...additions] } : current;
+    });
+  }, []);
 
   /** Merge newly picked/captured photos into the form (never drop earlier picks). */
   const addFiles = useCallback((files: File[]) => {
@@ -258,6 +269,9 @@ export default function DailyLogPage() {
                 <Button type="button" variant="outline" className="min-h-10" onClick={() => photoInputs.current.library?.click()}>
                   <ImagePlus className="size-4" /> Choose photos
                 </Button>
+                <Button type="button" variant="outline" className="min-h-10" onClick={() => setPickerOpen(true)}>
+                  <FolderOpen className="size-4" /> From Documents
+                </Button>
               </div>
             </div>
             {/* Opened via ref.click() rather than a wrapping <label>: buttons inside a
@@ -295,6 +309,15 @@ export default function DailyLogPage() {
           <Button className="min-h-11" type="submit" disabled={save.isPending}>{save.isPending ? <Spinner /> : null}{editing ? "Save log" : "Add log"}</Button>
         </form>
       </ResponsiveForm>
+
+      <ExistingDocumentPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title="Attach files from Documents"
+        defaultCategory="photos"
+        alreadyAttached={form.documents.map((doc) => doc.id)}
+        onConfirm={attachExisting}
+      />
 
       <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
