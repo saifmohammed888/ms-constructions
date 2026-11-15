@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, FileUp, Image as ImageIcon, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
+import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, FileUp, Grid3x3, Image as ImageIcon, List, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,25 +21,29 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { uploadDocuments, filesFromInput } from "@/lib/upload";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DocumentGrid, BulkBar } from "@/components/document-grid";
+import { applyOrganizeFilter, duplicateIds, isImageDoc, stageCounts, type OrganizeDoc, type OrganizeFilter } from "@/lib/document-organize";
 import Link from "next/link";
 
-type Doc = {
-  id: string;
-  name: string;
+type Doc = OrganizeDoc & {
   driveFileId: string;
   thumbnailUrl: string | null;
   webViewLink: string | null;
-  mimeType: string | null;
-  sizeBytes: number | null;
-  category: string;
-  tags: string[];
-  uploadedAt: string;
 };
+
+const PAGE_SIZE = 60;
+const VIEW_KEY = "documents-view";
 
 export default function DocumentsPage() {
   const qc = useQueryClient();
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [filter, setFilter] = useState<OrganizeFilter>({ kind: "all" });
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [bulk, setBulk] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [preview, setPreview] = useState<Doc | null>(null);
   const [selectedImage, setSelectedImage] = useState<Doc | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -50,13 +54,34 @@ export default function DocumentsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewsBusy, setPreviewsBusy] = useState(false);
   const [uploadState, setUploadState] = useState({ done: 0, total: 0, failed: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const activeUploadCategory = category ? (category as DocCategory) : uploadCategory;
 
+  // Remember the chosen view on this device. Storage can be blocked, which is fine.
+  useEffect(() => {
+    try {
+      // Reading the saved preference is the one place the view has to be set after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (window.localStorage.getItem(VIEW_KEY) === "list") setView("list");
+    } catch {
+      /* default view */
+    }
+  }, []);
+  const chooseView = (next: "grid" | "list") => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* not persisted */
+    }
+  };
+
   const selectCategory = (nextCategory: "" | DocCategory) => {
     setCategory(nextCategory);
+    setVisibleCount(PAGE_SIZE);
     if (nextCategory) setUploadCategory(nextCategory);
   };
 
@@ -67,11 +92,14 @@ export default function DocumentsPage() {
 
   const list = useQuery({
     queryKey: ["documents", category, q],
-    queryFn: () => {
+    queryFn: async () => {
       const s = new URLSearchParams();
       if (category) s.set("category", category);
       if (q) s.set("q", q);
-      return fetch(`/api/documents?${s}`).then((r) => r.json()) as Promise<Doc[]>;
+      const res = await fetch(`/api/documents?${s}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not load Documents");
+      return data as Doc[];
     },
   });
 
@@ -81,6 +109,28 @@ export default function DocumentsPage() {
     queryFn: () => fetch("/api/expenses").then((r) => r.json()) as Promise<{ items: { id: string; amount: string; category: string; date: string; receiptDocId: string | null }[] }>,
   });
 
+  const allDocuments = useMemo(() => list.data ?? [], [list.data]);
+  const duplicates = useMemo(() => duplicateIds(allDocuments), [allDocuments]);
+  const stages = useMemo(() => stageCounts(allDocuments).slice(0, 8), [allDocuments]);
+  const filtered = useMemo(() => applyOrganizeFilter(allDocuments, filter, duplicates), [allDocuments, filter, duplicates]);
+  const previewsMissing = allDocuments.filter((doc) => !doc.hasPreview && isImageDoc(doc)).length;
+
+  // Previous/next move through the list in the order it is shown.
+  const previewIndex = preview ? filtered.findIndex((d) => d.id === preview.id) : -1;
+  const stepPreview = (step: 1 | -1) => {
+    const target = filtered[previewIndex + step];
+    if (previewIndex >= 0 && target) setPreview(target);
+  };
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") { const t = filtered[previewIndex + 1]; if (t) setPreview(t); }
+      else if (e.key === "ArrowLeft") { const t = filtered[previewIndex - 1]; if (t) setPreview(t); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview, previewIndex, filtered]);
+
   const attachInvoice = useMutation({
     mutationFn: async (expenseId: string) => {
       if (!selectedImage) throw new Error("Select an image first");
@@ -88,7 +138,12 @@ export default function DocumentsPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Could not attach invoice");
     },
-    onSuccess: () => { toast.success("Invoice attached to expense"); setAttachOpen(false); setSelectedImage(null); },
+    onSuccess: () => {
+      toast.success("Invoice attached to expense");
+      setAttachOpen(false);
+      setSelectedImage(null);
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -100,7 +155,7 @@ export default function DocumentsPage() {
     setUploadState({ done: 0, total: files.length, failed: 0 });
     const { uploaded, failed } = await uploadDocuments<Doc>(files, {
       category: selectedCategory,
-      onProgress: (done) => setUploadState((state) => ({ ...state, done, failed: state.failed })),
+      onProgress: (done) => setUploadState((state) => ({ ...state, done })),
     });
     for (const item of failed) toast.error(`${item.file.name}: ${item.error}`);
     setUploadState((state) => ({ ...state, done: files.length, failed: failed.length }));
@@ -140,25 +195,76 @@ export default function DocumentsPage() {
       qc.invalidateQueries({ queryKey: ["documents"] });
       setEditing(null);
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const allDocuments = useMemo(() => list.data ?? [], [list.data]);
-
-  // Previous/next move through the list in the order it is shown.
-  const previewIndex = preview ? allDocuments.findIndex((d) => d.id === preview.id) : -1;
-  const stepPreview = (step: 1 | -1) => {
-    const target = allDocuments[previewIndex + step];
-    if (previewIndex >= 0 && target) setPreview(target);
+  // Bulk actions run one file at a time so Drive is never flooded and failures are reported per file.
+  const runBulk = async (label: string, work: (doc: Doc) => Promise<void>) => {
+    const targets = allDocuments.filter((doc) => bulk.has(doc.id));
+    if (!targets.length) return;
+    setBulkBusy(true);
+    let failed = 0;
+    for (const doc of targets) {
+      try {
+        await work(doc);
+      } catch {
+        failed += 1;
+      }
+    }
+    setBulkBusy(false);
+    await qc.invalidateQueries({ queryKey: ["documents"] });
+    const done = targets.length - failed;
+    if (done) toast.success(`${label}: ${done} file${done === 1 ? "" : "s"}`);
+    if (failed) toast.error(`${failed} file${failed === 1 ? "" : "s"} could not be updated. Try again.`);
+    setBulk(new Set());
   };
-  useEffect(() => {
-    if (!preview) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") { const t = allDocuments[previewIndex + 1]; if (t) setPreview(t); }
-      else if (e.key === "ArrowLeft") { const t = allDocuments[previewIndex - 1]; if (t) setPreview(t); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [preview, previewIndex, allDocuments]);
+
+  const bulkCategory = (next: DocCategory) =>
+    runBulk(`Moved to ${DOC_CATEGORY_LABELS[next]}`, async (doc) => {
+      if (doc.category === next) return;
+      const res = await fetch(`/api/documents/${doc.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: next }) });
+      if (!res.ok) throw new Error("Move failed");
+    });
+
+  const bulkTag = (tag: string) =>
+    runBulk(`Tagged "${tag}"`, async (doc) => {
+      if (doc.tags.includes(tag)) return;
+      const res = await fetch(`/api/documents/${doc.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tags: [...doc.tags, tag].slice(0, 50) }) });
+      if (!res.ok) throw new Error("Tag failed");
+    });
+
+  const bulkDelete = async () => {
+    setBulkDeleteOpen(false);
+    await runBulk("Removed", async (doc) => {
+      const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+    });
+  };
+
+  // Builds previews for older photos in small batches until none are left.
+  const makePreviews = async () => {
+    setPreviewsBusy(true);
+    let made = 0;
+    let remaining = previewsMissing;
+    try {
+      for (let round = 0; round < 40 && remaining > 0; round += 1) {
+        const res = await fetch("/api/document-previews/backfill", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Preview run failed");
+        made += data.processed;
+        remaining = data.remaining;
+        if (data.processed === 0) break;
+        void qc.invalidateQueries({ queryKey: ["documents"] });
+      }
+      toast.success(made ? `Previews made for ${made} photo${made === 1 ? "" : "s"}` : "No new previews were needed");
+      if (remaining > 0) toast.error(`${remaining} photo${remaining === 1 ? "" : "s"} still have no preview. Try again later.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not make previews");
+    } finally {
+      setPreviewsBusy(false);
+      await qc.invalidateQueries({ queryKey: ["documents"] });
+    }
+  };
 
   const downloadDocument = async (doc: Doc) => {
     try {
@@ -218,30 +324,35 @@ export default function DocumentsPage() {
     }
   };
 
+  const toggleBulk = (id: string) => {
+    setBulk((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const uploading = uploadState.total > 0 && uploadState.done < uploadState.total;
+  const gridDocs = filtered.slice(0, visibleCount);
+
   return (
-    <div className="library-page mx-auto flex max-w-5xl flex-col gap-4">
-      <UploadOverlay show={uploadState.total > 0 && uploadState.done < uploadState.total} />
+    <div className="library-page mx-auto flex max-w-5xl flex-col gap-4 pb-28">
+      <UploadOverlay show={uploading} />
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Documents</h1>
-          <p className="text-sm text-muted-foreground">Drawings, receipts, and approvals. View a file or tap its name to edit.</p>
+          <p className="text-sm text-muted-foreground">Drawings, photos, receipts and approvals. Tap a file to view it.</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Button type="button" variant="outline" className="min-h-11" onClick={() => setBulkOpen((open) => !open)} aria-expanded={bulkOpen}>
             {bulkOpen ? "Hide bulk upload" : "Bulk upload"}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
-            aria-label="Take photo"
-            onClick={() => cameraInputRef.current?.click()}
-            disabled={uploadState.total > 0 && uploadState.done < uploadState.total}
-          >
+          <Button type="button" variant="outline" className="min-h-11" aria-label="Take photo" onClick={() => cameraInputRef.current?.click()} disabled={uploading}>
             <Camera className="size-4" /> <span className="hidden sm:inline">Photo</span>
           </Button>
-          <Button type="button" className="min-h-11" onClick={() => inputRef.current?.click()} disabled={uploadState.total > 0 && uploadState.done < uploadState.total}>
-            {uploadState.total > 0 && uploadState.done < uploadState.total ? <Spinner /> : <Upload className="size-4" />}
+          <Button type="button" className="min-h-11" onClick={() => inputRef.current?.click()} disabled={uploading}>
+            {uploading ? <Spinner /> : <Upload className="size-4" />}
             Upload
           </Button>
           {/* Gallery / files picker. Hidden and opened via ref.click() so mobile
@@ -313,28 +424,88 @@ export default function DocumentsPage() {
         )}
       </section>}
 
-      <Input className="min-h-11" placeholder="Search name or tag" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input className="min-h-11 min-w-0 flex-1" placeholder="Search name or tag" value={q} onChange={(e) => { setQ(e.target.value); setVisibleCount(PAGE_SIZE); }} />
+        <div className="inline-flex rounded-xl border bg-white p-1" role="group" aria-label="View">
+          <button type="button" aria-pressed={view === "grid"} onClick={() => chooseView("grid")} className={`inline-flex min-h-9 items-center gap-1 rounded-lg px-3 text-sm ${view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+            <Grid3x3 className="size-4" /> Thumbnails
+          </button>
+          <button type="button" aria-pressed={view === "list"} onClick={() => chooseView("list")} className={`inline-flex min-h-9 items-center gap-1 rounded-lg px-3 text-sm ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+            <List className="size-4" /> List
+          </button>
+        </div>
+      </div>
+
       <div className="flex gap-2 overflow-x-auto pb-1">
-        <Button size="sm" className="min-h-9" variant={category === "" ? "default" : "outline"} onClick={() => selectCategory("")}>
+        <Button size="sm" className="min-h-9 shrink-0" variant={category === "" ? "default" : "outline"} onClick={() => selectCategory("")}>
           All
         </Button>
         {DOC_CATEGORIES.map((c) => (
-          <Button key={c} size="sm" className="min-h-9" variant={category === c ? "default" : "outline"} onClick={() => selectCategory(c)}>
+          <Button key={c} size="sm" className="min-h-9 shrink-0" variant={category === c ? "default" : "outline"} onClick={() => selectCategory(c)}>
             {DOC_CATEGORY_LABELS[c]}
           </Button>
         ))}
       </div>
 
-      {!list.isLoading && allDocuments.length > 0 && <ImageTable items={allDocuments} selected={selectedImage} sharingId={sharingId} downloadingId={downloadingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} onDownload={downloadDocument} />}
+      <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Quick filters">
+        {([["all", "Everything"], ["unlinked", "Not linked"], ["untagged", "No tags"], ["duplicates", `Possible duplicates${duplicates.size ? ` (${duplicates.size})` : ""}`]] as const).map(([kind, label]) => (
+          <Button key={kind} size="sm" className="min-h-9 shrink-0" variant={filter.kind === kind ? "default" : "outline"} onClick={() => { setFilter({ kind }); setVisibleCount(PAGE_SIZE); }}>
+            {label}
+          </Button>
+        ))}
+        {stages.map(({ stage, count }) => (
+          <Button key={stage} size="sm" className="min-h-9 shrink-0" variant={filter.kind === "stage" && filter.stage === stage ? "default" : "outline"} onClick={() => { setFilter({ kind: "stage", stage }); setVisibleCount(PAGE_SIZE); }}>
+            {stage} · {count}
+          </Button>
+        ))}
+      </div>
+
+      {previewsMissing > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white px-4 py-3 text-sm">
+          <span>{previewsMissing} photo{previewsMissing === 1 ? "" : "s"} still need a quick preview, so the thumbnails load fast.</span>
+          <Button type="button" variant="outline" className="min-h-10" onClick={makePreviews} disabled={previewsBusy}>
+            {previewsBusy && <Spinner />} Make previews
+          </Button>
+        </div>
+      )}
 
       {list.isLoading ? (
         <CardSkeleton rows={6} />
-      ) : (list.data?.length ?? 0) === 0 ? (
+      ) : list.isError ? (
+        <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive" role="alert">Could not load Documents. Check your connection and try again.</p>
+      ) : allDocuments.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">No documents yet</p>
           <p className="mt-1 text-sm text-muted-foreground">Upload a drawing or approval PDF.</p>
         </div>
-      ) : null}
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-10 text-center">
+          <p className="font-medium">Nothing matches this filter</p>
+          <Button className="mt-3 min-h-10" variant="outline" onClick={() => setFilter({ kind: "all" })}>Show everything</Button>
+        </div>
+      ) : view === "grid" ? (
+        <>
+          <DocumentGrid docs={gridDocs} selected={bulk} duplicates={duplicates} onToggle={toggleBulk} onOpen={(doc) => setPreview(doc as Doc)} />
+          {filtered.length > visibleCount && (
+            <Button variant="outline" className="min-h-11 self-center" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
+              Show more · {filtered.length - visibleCount} left
+            </Button>
+          )}
+        </>
+      ) : (
+        <ImageTable items={filtered} duplicates={duplicates} selected={selectedImage} sharingId={sharingId} downloadingId={downloadingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} onDownload={downloadDocument} />
+      )}
+
+      {bulk.size > 0 && (
+        <BulkBar
+          count={bulk.size}
+          busy={bulkBusy}
+          onCategory={bulkCategory}
+          onAddTag={bulkTag}
+          onDelete={() => setBulkDeleteOpen(true)}
+          onClear={() => setBulk(new Set())}
+        />
+      )}
 
       <Dialog open={Boolean(preview)} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-4xl">
@@ -347,8 +518,8 @@ export default function DocumentsPage() {
                 <Button variant="outline" className="min-h-11" onClick={() => stepPreview(-1)} disabled={previewIndex <= 0} aria-label="Previous document">
                   <ChevronLeft className="size-4" /> Previous
                 </Button>
-                <span className="text-sm text-muted-foreground" aria-live="polite">{previewIndex + 1} of {allDocuments.length}</span>
-                <Button variant="outline" className="min-h-11" onClick={() => stepPreview(1)} disabled={previewIndex < 0 || previewIndex >= allDocuments.length - 1} aria-label="Next document">
+                <span className="text-sm text-muted-foreground" aria-live="polite">{previewIndex + 1} of {filtered.length}</span>
+                <Button variant="outline" className="min-h-11" onClick={() => stepPreview(1)} disabled={previewIndex < 0 || previewIndex >= filtered.length - 1} aria-label="Next document">
                   Next <ChevronRight className="size-4" />
                 </Button>
               </div>
@@ -372,7 +543,10 @@ export default function DocumentsPage() {
                   <Trash2 className="size-4" /> Delete
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Added {formatDate(preview.uploadedAt)}</p>
+              <p className="text-xs text-muted-foreground">
+                Added {formatDate(preview.uploadedAt.slice(0, 10))} · {preview.linkCount} linked {preview.linkCount === 1 ? "record" : "records"}
+                {duplicates.has(preview.id) && " · possible duplicate of another file with the same name and size"}
+              </p>
             </div>
           )}
         </DialogContent>
@@ -407,12 +581,20 @@ export default function DocumentsPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && del.mutate(pendingDelete)}
       />
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={`Delete ${bulk.size} file${bulk.size === 1 ? "" : "s"}?`}
+        body="The selected files are removed from the app and unlinked from any expenses or work logs. They stay in Google Drive."
+        pending={bulkBusy}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={bulkDelete}
+      />
     </div>
   );
 }
 
-function ImageTable({ items, selected, sharingId, downloadingId, onSelect, onView, onEdit, onAttach, onShare, onDownload }: { items: Doc[]; selected: Doc | null; sharingId: string | null; downloadingId: string | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void; onShare: (doc: Doc) => void; onDownload: (doc: Doc) => void }) {
-  return <section className="table-shell overflow-x-auto" aria-label="Document files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button></td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt)}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" className="size-11 p-0 lg:h-8 lg:w-auto lg:px-3" onClick={() => onView(doc)} aria-label={`View ${doc.name}`} title="View"><Eye className="size-3.5" /><span className="hidden lg:inline">View</span></Button><Button variant="outline" size="sm" className="size-11 p-0 lg:h-8 lg:w-auto lg:px-3" onClick={() => onDownload(doc)} disabled={downloadingId === doc.id} aria-label={`Download ${doc.name}`} title="Download">{downloadingId === doc.id ? <Spinner /> : <Download className="size-3.5" />}<span className="hidden lg:inline">Download</span></Button><Button variant="outline" size="sm" className="size-11 p-0 lg:h-8 lg:w-auto lg:px-3" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}<span className="hidden lg:inline">Share</span></Button></div></td></tr>)}</tbody></table></section>;
+function ImageTable({ items, duplicates, selected, sharingId, downloadingId, onSelect, onView, onEdit, onAttach, onShare, onDownload }: { items: Doc[]; duplicates: Set<string>; selected: Doc | null; sharingId: string | null; downloadingId: string | null; onSelect: (doc: Doc | null) => void; onView: (doc: Doc) => void; onEdit: (doc: Doc) => void; onAttach: () => void; onShare: (doc: Doc) => void; onDownload: (doc: Doc) => void }) {
+  return <section className="table-shell overflow-x-auto" aria-label="Document files"><div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-4 py-3"><ImageIcon className="size-4 text-primary" /><h2 className="text-sm font-semibold">All files</h2><span className="text-xs text-muted-foreground">{items.length} files · click a title to edit</span>{selected && <Button size="sm" className="ml-auto" onClick={onAttach}><Check className="size-3.5" />Attach to expense</Button>}</div><table className="w-full text-sm"><thead><tr><th className="w-10" aria-label="Select" /><th>File</th><th>Category</th><th>Added</th><th>Links</th><th className="text-right">Action</th></tr></thead><tbody>{items.map((doc) => <tr key={doc.id}><td><Checkbox checked={selected?.id === doc.id} aria-label={`Select ${doc.name}`} onCheckedChange={(checked) => onSelect(checked ? doc : null)} /></td><td className="max-w-[24rem] truncate font-medium"><button className="text-left hover:text-primary hover:underline" onClick={() => onEdit(doc)}>{doc.name}</button>{duplicates.has(doc.id) && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900">Possible duplicate</span>}</td><td className="text-muted-foreground">{DOC_CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}</td><td className="text-muted-foreground">{formatDate(doc.uploadedAt.slice(0, 10))}</td><td className="text-muted-foreground">{doc.linkCount}</td><td><div className="flex justify-end gap-1"><Button variant="outline" size="sm" className="size-11 p-0 lg:h-8 lg:w-auto lg:px-3" onClick={() => onView(doc)} aria-label={`View ${doc.name}`} title="View"><Eye className="size-3.5" /><span className="hidden lg:inline">View</span></Button><Button variant="outline" size="sm" className="size-11 p-0 lg:h-8 lg:w-auto lg:px-3" onClick={() => onDownload(doc)} disabled={downloadingId === doc.id} aria-label={`Download ${doc.name}`} title="Download">{downloadingId === doc.id ? <Spinner /> : <Download className="size-3.5" />}<span className="hidden lg:inline">Download</span></Button><Button variant="outline" size="sm" className="size-11 p-0 lg:h-8 lg:w-auto lg:px-3" onClick={() => onShare(doc)} disabled={sharingId === doc.id} aria-label={`Share ${doc.name} as file`} title="Share file">{sharingId === doc.id ? <Spinner /> : <MessageCircle className="size-3.5" />}<span className="hidden lg:inline">Share</span></Button></div></td></tr>)}</tbody></table></section>;
 }
 
 function documentShareLink(doc: Doc) {
@@ -438,17 +620,6 @@ async function readJsonResponse<T>(res: Response) {
 
 function getErrorMessage(body: unknown, fallback: string) {
   return typeof body === "object" && body && "error" in body && typeof body.error === "string" ? body.error : fallback;
-}
-
-function formatBytes(bytes: number) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-function DocumentStat({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="rounded-2xl border bg-white p-4 shadow-sm"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold tracking-tight">{value}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{detail}</p></div>;
 }
 
 function DocEditForm({

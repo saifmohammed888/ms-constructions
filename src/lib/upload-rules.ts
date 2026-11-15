@@ -1,3 +1,5 @@
+import { TZ } from "@/lib/constants";
+
 /**
  * Upload limits shared by the browser and the server, so a file that the phone
  * accepts is never rejected later by the API, and vice versa.
@@ -44,4 +46,34 @@ export function uploadProblem(file: { size: number; name: string; type: string }
   const mime = resolveMimeType(file.type, file.name);
   if (!ALLOWED_MIME_TYPES.has(mime)) return "This file type is not supported. Use a photo, PDF, Word or Excel file.";
   return null;
+}
+
+/** Camera and phone names carry no information; anything else is the owner's own name. */
+const GENERIC_STEM = /^(img|dsc|dscn|pxl|image|photo|screenshot|whatsapp image|received|download)?[\s_()-]*\d*$/i;
+
+/** Current time in India as YYYY-MM-DD_HHMM, the start of the library naming convention. */
+export function uploadStamp(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}_${part("hour")}${part("minute")}`;
+}
+
+/**
+ * Give a generic camera file a readable name, e.g. IMG_1184.jpeg becomes
+ * 2026-11-15_1542_photos_IMG_1184.jpg. Names the owner chose are left alone.
+ */
+export function friendlyFileName(name: string, category: string, stamp: string) {
+  const ext = extensionOf(name);
+  const stem = name.replace(/\.[^.]+$/, "").trim();
+  if (!stem || !GENERIC_STEM.test(stem)) return name;
+  const safeStem = stem.replace(/\s+/g, "-");
+  return `${stamp}_${category}_${safeStem}${ext ? `.${ext}` : ""}`;
 }

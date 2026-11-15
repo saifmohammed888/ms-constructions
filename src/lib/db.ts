@@ -13,7 +13,7 @@ let ready = false;
 let bootstrapping: Promise<AppDb> | null = null;
 
 // Bump when the DDL below changes so existing databases re-run it once.
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 // Normal application routes always use DATABASE_URL. Agent traffic uses its
 // own connection and never shares this pool.
@@ -142,6 +142,7 @@ CREATE INDEX IF NOT EXISTS expenses_category_idx ON expenses (category);
 CREATE INDEX IF NOT EXISTS expenses_contact_idx ON expenses (contact_id);
 CREATE INDEX IF NOT EXISTS documents_category_idx ON documents (category);
 CREATE INDEX IF NOT EXISTS documents_uploaded_at_idx ON documents (uploaded_at DESC);
+CREATE TABLE IF NOT EXISTS document_thumbnails (document_id uuid PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE, mime_type text NOT NULL, data bytea NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS app_schema (id int PRIMARY KEY, version int NOT NULL);
 INSERT INTO app_schema (id, version) VALUES (1, ${SCHEMA_VERSION})
   ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version;

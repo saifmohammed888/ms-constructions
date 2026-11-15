@@ -13,18 +13,30 @@ export function documentFileUrl(id: string, opts: { download?: boolean } = {}) {
   return opts.download ? `${base}?download=1` : base;
 }
 
+export function documentThumbUrl(id: string) {
+  return `/api/documents/${encodeURIComponent(id)}/thumb`;
+}
+
+/**
+ * Shows a document image. With `preview`, the small stored thumbnail is used
+ * first and the full file is the fallback, so lists stay light without ever
+ * showing a broken picture.
+ */
 export function DocumentImage({
   id,
   alt,
   className,
   imgClassName,
+  preview = false,
 }: {
   id: string;
   alt: string;
   className?: string;
   imgClassName?: string;
+  preview?: boolean;
 }) {
-  const src = documentFileUrl(id);
+  const [useFull, setUseFull] = useState(false);
+  const src = preview && !useFull ? documentThumbUrl(id) : documentFileUrl(id);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   // Reset during render (not in an effect) when the document changes, so a new
   // photo starts in the loading state without a cascading re-render.
@@ -55,7 +67,11 @@ export function DocumentImage({
         decoding="async"
         className={cn("relative transition-opacity", status === "ready" ? "opacity-100" : "opacity-0", imgClassName)}
         onLoad={() => setStatus("ready")}
-        onError={() => setStatus("error")}
+        onError={() => {
+          // A missing preview falls back to the full file once, then gives up.
+          if (preview && !useFull) setUseFull(true);
+          else setStatus("error");
+        }}
       />
     </span>
   );

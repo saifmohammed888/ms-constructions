@@ -20,11 +20,16 @@ export async function GET(req: NextRequest) {
     );
   }
   const rows = await db
-    .select()
+    .select({
+      doc: documents,
+      // Distinct links: expenses (as receipts or attachments) and work logs.
+      linkCount: sql<number>`(SELECT count(*)::int FROM (SELECT expense_id AS ref FROM expense_documents WHERE document_id = ${documents.id} UNION SELECT id FROM expenses WHERE receipt_doc_id = ${documents.id} UNION ALL SELECT site_update_id FROM site_update_documents WHERE document_id = ${documents.id}) links)`,
+      hasPreview: sql<boolean>`EXISTS (SELECT 1 FROM document_thumbnails t WHERE t.document_id = ${documents.id})`,
+    })
     .from(documents)
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(desc(documents.uploadedAt));
-  return NextResponse.json(rows);
+  return NextResponse.json(rows.map(({ doc, linkCount, hasPreview }) => ({ ...doc, linkCount: Number(linkCount), hasPreview: Boolean(hasPreview) })));
 }
 
 export async function POST() {
