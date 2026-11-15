@@ -15,6 +15,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const patch: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.amount != null) patch.amount = String(parsed.data.amount);
   delete patch.receiptDocIds;
+  // The primary receipt must follow the link list, or an unlinked file would linger.
+  if (parsed.data.receiptDocIds) patch.receiptDocId = parsed.data.receiptDocIds[0] ?? null;
   const [row] = await db.update(expenses).set(patch).where(eq(expenses.id, id)).returning();
   if (!row) return jsonError("Not found", 404);
   if (parsed.data.receiptDocIds) {

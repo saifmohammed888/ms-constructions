@@ -17,7 +17,7 @@ import {
 import { ResponsiveForm } from "@/components/responsive-form";
 import { Spinner } from "@/components/ui/spinner";
 import { ExistingDocumentPicker } from "@/components/existing-document-picker";
-import { Camera, Check, ImagePlus } from "lucide-react";
+import { Camera, ImagePlus, X } from "lucide-react";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_LABELS,
@@ -89,7 +89,8 @@ export function ExpenseForm({
 
   const save = useMutation({
     mutationFn: async () => {
-      const receiptDocIds = [...selectedReceipts.map((doc) => doc.id), ...(initial?.receiptDocIds ?? (initial?.receiptDocId ? [initial.receiptDocId] : []))];
+      // The form is the full list of linked files: anything removed here is unlinked on save.
+      const receiptDocIds = selectedReceipts.map((doc) => doc.id);
       const { uploaded, failed } = await uploadDocuments<ReceiptDocument>(receipts, { category: "receipts" });
       for (const doc of uploaded) receiptDocIds.push(doc.id);
       if (failed.length > 0) toast.error(`${failed.length} receipt${failed.length === 1 ? "" : "s"} could not be uploaded: ${failed[0].error}`);
@@ -247,7 +248,7 @@ export function ExpenseForm({
             <Button type="button" variant="outline" className="min-h-10" onClick={() => setReceiptPickerOpen(true)}>
               Choose from Documents
             </Button>
-            {selectedReceipts.length > 0 && <span className="max-w-full truncate text-xs text-muted-foreground">{selectedReceipts.length} existing receipt{selectedReceipts.length === 1 ? "" : "s"} selected</span>}
+            {selectedReceipts.map((doc) => <span key={doc.id} className="inline-flex max-w-full items-center gap-1 rounded-full bg-secondary px-3 py-1 text-xs"><span className="truncate">{doc.name}</span><button type="button" aria-label={`Unlink ${doc.name}`} className="inline-flex size-5 items-center justify-center rounded-full hover:bg-black/10" onClick={() => setSelectedReceipts((current) => current.filter((item) => item.id !== doc.id))}><X className="size-3" /></button></span>)}
             {receipts.length > 0 && <span className="max-w-full truncate text-xs text-muted-foreground">{receipts.length} file{receipts.length === 1 ? "" : "s"} ready to upload</span>}
           </div>
         </div>

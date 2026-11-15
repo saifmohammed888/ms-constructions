@@ -402,7 +402,7 @@ export default function DocumentsPage() {
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="Delete this file?"
-        body={pendingDelete ? `${pendingDelete.name} will be removed here and moved to Drive trash.` : ""}
+        body={pendingDelete ? `${pendingDelete.name} is removed from the app and unlinked from any expenses or work logs. The file stays in Google Drive.` : ""}
         pending={del.isPending}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && del.mutate(pendingDelete)}
