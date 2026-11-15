@@ -6,6 +6,8 @@ import { z } from "zod";
 import { getAgentDb } from "@/lib/db";
 import { agentMessages, projects } from "@/lib/schema";
 import { getSession } from "@/lib/session";
+import { todayIso } from "@/lib/format";
+import { CONTACT_ROLES, DOC_CATEGORIES, EXPENSE_CATEGORIES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -209,6 +211,37 @@ async function readWithRetry<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Schema and rules the model needs, so it queries real columns on the first try. */
+const SCHEMA_NOTES = `
+Tables (snake_case columns; money is numeric, dates are YYYY-MM-DD):
+- expenses(id, amount, category, date, payment_mode, payment_status, due_date, contact_id, receipt_doc_id, notes, created_at)
+  payment_status is 'paid' or 'due'. Only 'paid' counts as spend; 'due' is money still owed.
+  category values: ${EXPENSE_CATEGORIES.join(", ")}.
+  payment_mode values: cash, upi, bank, cheque.
+- expense_documents(expense_id, document_id): files linked to an expense (many-to-many).
+- contacts(id, name, company, role, phone, email, notes, tags, updated_at). role: ${CONTACT_ROLES.join(", ")}.
+- tasks(id, title, group_type, goal_label, due_date, status, priority, notes, completed_at, created_at). status: todo or done. priority: low, normal, high, urgent.
+- site_updates(id, date, work_completed, work_in_progress, work_planned, blockers, worker_count, materials_received, status, notes). One work log per day. status 'auto_generated' is a placeholder, not real site work.
+- documents(id, name, category, tags, mime_type, uploaded_at). category values: ${DOC_CATEGORIES.join(", ")}.
+- settings(project_name, budget_total, budget_by_category): one row, read-only for queries.
+- project_trackers(id, tracker, title, data, created_at): tracker is decisions, learnings, savings or quotations.
+`;
+
+function agentSystemPrompt() {
+  return [
+    "You are the project assistant for a home construction build. You can read the project database with query_project_data",
+    "and change records with execute_write_query. Never delete data.",
+    `Today is ${todayIso()} (India time). Resolve "today", "this month" and "last week" from that date.`,
+    "Look at the schema below before you query; use only these columns.",
+    SCHEMA_NOTES,
+    "Method: query first, then answer. Every number or name in your answer must come from a query result.",
+    "Example: 'How much did we spend on foundation this month?' -> SELECT SUM(amount) FROM expenses WHERE payment_status='paid' AND category='foundation' AND date >= date_trunc('month', CURRENT_DATE);",
+    "If a query returns an error, fix the column or table name and try again once. If the data is not there, say so.",
+    "Writes: INSERT or UPDATE with a WHERE clause and RETURNING id. Confirm to the user exactly what changed.",
+    "Answer in 2-6 short sentences or bullets, in plain English, with amounts in rupees (₹) and dates like 14 Nov 2026.",
+  ].join("\n");
+}
+
 const queryProjectData = tool({
   description:
     "Run a single read-only SELECT / WITH SQL query against the construction project database and return at most 200 rows. Use it for every project fact; never invent data.",
@@ -389,24 +422,17 @@ export async function POST(req: NextRequest) {
 
     const result = await generateText({
       model: deepseek("deepseek-chat"),
-      system:
-        "You have read access via query_project_data and write access via execute_write_query. " +
-        "You can add tasks, update expenses, or modify records. NEVER attempt to delete data. " +
-        "When a user asks you to make a change, use the write tool and then confirm to the user what you did. " +
-        "Answer in 2-6 short sentences or bullets. Query the database with query_project_data for every " +
-        "factual claim, and look up the real row ids before writing. UPDATE statements must include a " +
-        "WHERE clause, and never write to agent_messages, settings, or login_attempts. " +
-        "If data is missing or a query fails, say so plainly instead of guessing.",
+      system: agentSystemPrompt(),
       messages: context.length > 0 ? context : [{ role: "user", content: question }],
       tools: {
         query_project_data: queryProjectData,
         execute_write_query: executeWriteQuery,
       },
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(8),
       temperature: 0.1,
       // Tool calls and the final answer share this budget; too small a value
       // can end the run before any text is written.
-      maxOutputTokens: 700,
+      maxOutputTokens: 1000,
     });
 
     // Never persist or return a blank assistant message. When a provider ends
