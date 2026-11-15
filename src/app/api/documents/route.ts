@@ -1,35 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { documents } from "@/lib/schema";
 import { jsonError } from "@/lib/http";
-import { uploadDriveFile } from "@/lib/google";
-import { DOC_CATEGORIES, type DocCategory } from "@/lib/constants";
+import { DOCUMENT_FILTERS, DUPLICATE, HAS_PREVIEW, LINK_COUNT, documentWhere, type DocumentFilter } from "@/lib/document-queries";
 
 export const runtime = "nodejs";
 
+const MAX_PAGE = 200;
+const DEFAULT_PAGE = 60;
+
+/**
+ * Without `limit`, returns every matching document as a plain list (used by
+ * the pickers). With `limit` and `offset`, returns one page and the total.
+ */
 export async function GET(req: NextRequest) {
   const db = await getDb();
-  const category = req.nextUrl.searchParams.get("category");
-  const q = req.nextUrl.searchParams.get("q")?.trim();
-  const filters = [];
-  if (category) filters.push(eq(documents.category, category));
-  if (q) {
-    filters.push(
-      or(like(documents.name, `%${q}%`), sql`cast(${documents.tags} as text) like ${"%" + q + "%"}`)!,
-    );
+  const sp = req.nextUrl.searchParams;
+  const rawFilter = sp.get("filter") ?? "all";
+  const filter = (DOCUMENT_FILTERS as readonly string[]).includes(rawFilter) ? (rawFilter as DocumentFilter) : "all";
+  const where = documentWhere({ category: sp.get("category"), q: sp.get("q")?.trim(), filter, stage: sp.get("stage") });
+
+  const shape = (rows: { doc: typeof documents.$inferSelect; linkCount: number; hasPreview: boolean; isDuplicate: boolean }[]) =>
+    rows.map(({ doc, linkCount, hasPreview, isDuplicate }) => ({ ...doc, linkCount: Number(linkCount), hasPreview: Boolean(hasPreview), isDuplicate: Boolean(isDuplicate) }));
+  const columns = {
+    doc: documents,
+    linkCount: LINK_COUNT,
+    hasPreview: HAS_PREVIEW,
+    isDuplicate: sql<boolean>`${DUPLICATE}`,
+  };
+
+  if (!sp.has("limit")) {
+    const rows = await db.select(columns).from(documents).where(where).orderBy(desc(documents.uploadedAt));
+    return NextResponse.json(shape(rows));
   }
-  const rows = await db
-    .select({
-      doc: documents,
-      // Distinct links: expenses (as receipts or attachments) and work logs.
-      linkCount: sql<number>`(SELECT count(*)::int FROM (SELECT expense_id AS ref FROM expense_documents WHERE document_id = ${documents.id} UNION SELECT id FROM expenses WHERE receipt_doc_id = ${documents.id} UNION ALL SELECT site_update_id FROM site_update_documents WHERE document_id = ${documents.id}) links)`,
-      hasPreview: sql<boolean>`EXISTS (SELECT 1 FROM document_thumbnails t WHERE t.document_id = ${documents.id})`,
-    })
-    .from(documents)
-    .where(filters.length ? and(...filters) : undefined)
-    .orderBy(desc(documents.uploadedAt));
-  return NextResponse.json(rows.map(({ doc, linkCount, hasPreview }) => ({ ...doc, linkCount: Number(linkCount), hasPreview: Boolean(hasPreview) })));
+
+  const limit = Math.min(Math.max(Number(sp.get("limit")) || DEFAULT_PAGE, 1), MAX_PAGE);
+  const offset = Math.max(Math.floor(Number(sp.get("offset")) || 0), 0);
+  const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(documents).where(where);
+  const rows = await db.select(columns).from(documents).where(where).orderBy(desc(documents.uploadedAt), desc(documents.id)).limit(limit).offset(offset);
+  return NextResponse.json({ items: shape(rows), total: Number(total), offset, limit }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST() {

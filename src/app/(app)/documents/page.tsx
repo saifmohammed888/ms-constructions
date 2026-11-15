@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Camera, Check, ChevronLeft, ChevronRight, Download, Eye, FileUp, Grid3x3, Image as ImageIcon, List, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,12 @@ import { uploadDocuments, filesFromInput } from "@/lib/upload";
 import { CardSkeleton, Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DocumentGrid, BulkBar } from "@/components/document-grid";
-import { applyOrganizeFilter, duplicateIds, isImageDoc, stageCounts, type OrganizeDoc, type OrganizeFilter } from "@/lib/document-organize";
+import { isImageDoc, type OrganizeDoc } from "@/lib/document-organize";
+
+type FilterKind = "all" | "unlinked" | "untagged" | "duplicates" | "stage";
+type PageFilter = { kind: FilterKind; stage?: string };
+
+type FacetCounts = { total: number; unlinked: number; untagged: number; duplicates: number; withoutPreview: number; stages: { stage: string; count: number }[] };
 import Link from "next/link";
 
 type Doc = OrganizeDoc & {
@@ -39,8 +44,8 @@ export default function DocumentsPage() {
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [filter, setFilter] = useState<OrganizeFilter>({ kind: "all" });
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [filter, setFilter] = useState<PageFilter>({ kind: "all" });
+  const [page, setPage] = useState(0);
   const [bulk, setBulk] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -79,9 +84,19 @@ export default function DocumentsPage() {
     }
   };
 
+  // Any change of search, filter or category starts again at the first page.
+  const resetPaging = () => {
+    setPage(0);
+    setBulk(new Set());
+  };
+  const chooseFilter = (next: PageFilter) => {
+    setFilter(next);
+    resetPaging();
+  };
+
   const selectCategory = (nextCategory: "" | DocCategory) => {
     setCategory(nextCategory);
-    setVisibleCount(PAGE_SIZE);
+    resetPaging();
     if (nextCategory) setUploadCategory(nextCategory);
   };
 
@@ -91,15 +106,27 @@ export default function DocumentsPage() {
   });
 
   const list = useQuery({
-    queryKey: ["documents", category, q],
+    queryKey: ["documents", "page", category, q, filter.kind, filter.stage ?? "", page],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
-      const s = new URLSearchParams();
-      if (category) s.set("category", category);
-      if (q) s.set("q", q);
-      const res = await fetch(`/api/documents?${s}`);
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE), filter: filter.kind });
+      if (category) params.set("category", category);
+      if (q) params.set("q", q);
+      if (filter.stage) params.set("stage", filter.stage);
+      const res = await fetch(`/api/documents?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not load Documents");
-      return data as Doc[];
+      return data as { items: Doc[]; total: number };
+    },
+  });
+
+  // Counts for the filter chips, across the whole library.
+  const facets = useQuery({
+    queryKey: ["documents", "facets"],
+    queryFn: async () => {
+      const res = await fetch("/api/documents/facets");
+      if (!res.ok) throw new Error("Could not load counts");
+      return (await res.json()) as FacetCounts;
     },
   });
 
@@ -109,27 +136,28 @@ export default function DocumentsPage() {
     queryFn: () => fetch("/api/expenses").then((r) => r.json()) as Promise<{ items: { id: string; amount: string; category: string; date: string; receiptDocId: string | null }[] }>,
   });
 
-  const allDocuments = useMemo(() => list.data ?? [], [list.data]);
-  const duplicates = useMemo(() => duplicateIds(allDocuments), [allDocuments]);
-  const stages = useMemo(() => stageCounts(allDocuments).slice(0, 8), [allDocuments]);
-  const filtered = useMemo(() => applyOrganizeFilter(allDocuments, filter, duplicates), [allDocuments, filter, duplicates]);
-  const previewsMissing = allDocuments.filter((doc) => !doc.hasPreview && isImageDoc(doc)).length;
+  const allDocuments = useMemo(() => list.data?.items ?? [], [list.data]);
+  const total = list.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const duplicates = useMemo(() => new Set(allDocuments.filter((doc) => doc.isDuplicate).map((doc) => doc.id)), [allDocuments]);
+  const stages = facets.data?.stages ?? [];
+  const previewsMissing = facets.data?.withoutPreview ?? 0;
 
   // Previous/next move through the list in the order it is shown.
-  const previewIndex = preview ? filtered.findIndex((d) => d.id === preview.id) : -1;
+  const previewIndex = preview ? allDocuments.findIndex((d) => d.id === preview.id) : -1;
   const stepPreview = (step: 1 | -1) => {
-    const target = filtered[previewIndex + step];
+    const target = allDocuments[previewIndex + step];
     if (previewIndex >= 0 && target) setPreview(target);
   };
   useEffect(() => {
     if (!preview) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") { const t = filtered[previewIndex + 1]; if (t) setPreview(t); }
-      else if (e.key === "ArrowLeft") { const t = filtered[previewIndex - 1]; if (t) setPreview(t); }
+      if (e.key === "ArrowRight") { const t = allDocuments[previewIndex + 1]; if (t) setPreview(t); }
+      else if (e.key === "ArrowLeft") { const t = allDocuments[previewIndex - 1]; if (t) setPreview(t); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [preview, previewIndex, filtered]);
+  }, [preview, previewIndex, allDocuments]);
 
   const attachInvoice = useMutation({
     mutationFn: async (expenseId: string) => {
@@ -334,7 +362,6 @@ export default function DocumentsPage() {
   };
 
   const uploading = uploadState.total > 0 && uploadState.done < uploadState.total;
-  const gridDocs = filtered.slice(0, visibleCount);
 
   return (
     <div className="library-page mx-auto flex max-w-5xl flex-col gap-4 pb-28">
@@ -425,7 +452,7 @@ export default function DocumentsPage() {
       </section>}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Input className="min-h-11 min-w-0 flex-1" placeholder="Search name or tag" value={q} onChange={(e) => { setQ(e.target.value); setVisibleCount(PAGE_SIZE); }} />
+        <Input className="min-h-11 min-w-0 flex-1" placeholder="Search name or tag" value={q} onChange={(e) => { setQ(e.target.value); resetPaging(); }} />
         <div className="inline-flex rounded-xl border bg-white p-1" role="group" aria-label="View">
           <button type="button" aria-pressed={view === "grid"} onClick={() => chooseView("grid")} className={`inline-flex min-h-9 items-center gap-1 rounded-lg px-3 text-sm ${view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
             <Grid3x3 className="size-4" /> Thumbnails
@@ -448,13 +475,13 @@ export default function DocumentsPage() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Quick filters">
-        {([["all", "Everything"], ["unlinked", "Not linked"], ["untagged", "No tags"], ["duplicates", `Possible duplicates${duplicates.size ? ` (${duplicates.size})` : ""}`]] as const).map(([kind, label]) => (
-          <Button key={kind} size="sm" className="min-h-9 shrink-0" variant={filter.kind === kind ? "default" : "outline"} onClick={() => { setFilter({ kind }); setVisibleCount(PAGE_SIZE); }}>
-            {label}
+        {([["all", "Everything", facets.data?.total], ["unlinked", "Not linked", facets.data?.unlinked], ["untagged", "No tags", facets.data?.untagged], ["duplicates", "Possible duplicates", facets.data?.duplicates]] as const).map(([kind, label, count]) => (
+          <Button key={kind} size="sm" className="min-h-9 shrink-0" variant={filter.kind === kind ? "default" : "outline"} onClick={() => chooseFilter({ kind })}>
+            {label}{count !== undefined && count > 0 && kind !== "all" ? ` (${count})` : ""}
           </Button>
         ))}
         {stages.map(({ stage, count }) => (
-          <Button key={stage} size="sm" className="min-h-9 shrink-0" variant={filter.kind === "stage" && filter.stage === stage ? "default" : "outline"} onClick={() => { setFilter({ kind: "stage", stage }); setVisibleCount(PAGE_SIZE); }}>
+          <Button key={stage} size="sm" className="min-h-9 shrink-0" variant={filter.kind === "stage" && filter.stage === stage ? "default" : "outline"} onClick={() => chooseFilter({ kind: "stage", stage })}>
             {stage} · {count}
           </Button>
         ))}
@@ -473,27 +500,37 @@ export default function DocumentsPage() {
         <CardSkeleton rows={6} />
       ) : list.isError ? (
         <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive" role="alert">Could not load Documents. Check your connection and try again.</p>
-      ) : allDocuments.length === 0 ? (
+      ) : total === 0 && !q && !category && filter.kind === "all" ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">No documents yet</p>
           <p className="mt-1 text-sm text-muted-foreground">Upload a drawing or approval PDF.</p>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : allDocuments.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">Nothing matches this filter</p>
-          <Button className="mt-3 min-h-10" variant="outline" onClick={() => setFilter({ kind: "all" })}>Show everything</Button>
+          <Button className="mt-3 min-h-10" variant="outline" onClick={() => chooseFilter({ kind: "all" })}>Show everything</Button>
         </div>
       ) : view === "grid" ? (
         <>
-          <DocumentGrid docs={gridDocs} selected={bulk} duplicates={duplicates} onToggle={toggleBulk} onOpen={(doc) => setPreview(doc as Doc)} />
-          {filtered.length > visibleCount && (
-            <Button variant="outline" className="min-h-11 self-center" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
-              Show more · {filtered.length - visibleCount} left
-            </Button>
-          )}
+          <DocumentGrid docs={allDocuments} selected={bulk} duplicates={duplicates} onToggle={toggleBulk} onOpen={(doc) => setPreview(doc as Doc)} />
         </>
       ) : (
-        <ImageTable items={filtered} duplicates={duplicates} selected={selectedImage} sharingId={sharingId} downloadingId={downloadingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} onDownload={downloadDocument} />
+        <ImageTable items={allDocuments} duplicates={duplicates} selected={selectedImage} sharingId={sharingId} downloadingId={downloadingId} onSelect={setSelectedImage} onView={setPreview} onEdit={setEditing} onAttach={() => setAttachOpen(true)} onShare={shareDocumentFile} onDownload={downloadDocument} />
+      )}
+
+      {pageCount > 1 && (
+        <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="min-h-11" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0 || list.isFetching} aria-label="Previous page">
+              <ChevronLeft className="size-4" /> Previous
+            </Button>
+            <span aria-live="polite">Page {page + 1} of {pageCount}</span>
+            <Button variant="outline" className="min-h-11" onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={page >= pageCount - 1 || list.isFetching} aria-label="Next page">
+              Next <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </nav>
       )}
 
       {bulk.size > 0 && (
@@ -518,8 +555,8 @@ export default function DocumentsPage() {
                 <Button variant="outline" className="min-h-11" onClick={() => stepPreview(-1)} disabled={previewIndex <= 0} aria-label="Previous document">
                   <ChevronLeft className="size-4" /> Previous
                 </Button>
-                <span className="text-sm text-muted-foreground" aria-live="polite">{previewIndex + 1} of {filtered.length}</span>
-                <Button variant="outline" className="min-h-11" onClick={() => stepPreview(1)} disabled={previewIndex < 0 || previewIndex >= filtered.length - 1} aria-label="Next document">
+                <span className="text-sm text-muted-foreground" aria-live="polite">{previewIndex + 1} of {allDocuments.length}</span>
+                <Button variant="outline" className="min-h-11" onClick={() => stepPreview(1)} disabled={previewIndex < 0 || previewIndex >= allDocuments.length - 1} aria-label="Next document">
                   Next <ChevronRight className="size-4" />
                 </Button>
               </div>
@@ -545,7 +582,7 @@ export default function DocumentsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Added {formatDate(preview.uploadedAt.slice(0, 10))} · {preview.linkCount} linked {preview.linkCount === 1 ? "record" : "records"}
-                {duplicates.has(preview.id) && " · possible duplicate of another file with the same name and size"}
+                {preview.isDuplicate && " · possible duplicate of another file with the same name and size"}
               </p>
             </div>
           )}
