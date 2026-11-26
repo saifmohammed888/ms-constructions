@@ -7,6 +7,10 @@ import { eq } from "drizzle-orm";
 import { DOC_CATEGORIES, type DocCategory } from "@/lib/constants";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+// Read-only access to the rest of Drive so the MCP `file_attach_drive` tool can
+// copy photos the owner already saved in Drive into the app folder. The app
+// never edits or deletes files outside its own folder.
+const DRIVE_READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const CAL_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 
 export function googleConfigured() {
@@ -37,7 +41,7 @@ export function googleAuthUrl(baseUrl: string) {
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: [DRIVE_SCOPE, CAL_SCOPE],
+    scope: [DRIVE_SCOPE, DRIVE_READ_SCOPE, CAL_SCOPE],
   });
 }
 
