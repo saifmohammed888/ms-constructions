@@ -95,6 +95,8 @@ export function decodeBase64(value: string) {
   return buffer;
 }
 
+type DriveFileMeta = { id?: string | null; name?: string | null; mimeType?: string | null; size?: string | null; thumbnailLink?: string | null; webViewLink?: string | null };
+
 export async function saveFile(buffer: Buffer, input: SaveInput) {
   if (!buffer.length || buffer.length > MAX_FILE_BYTES) throw new Error("File must be between 1 byte and 10 MB");
   await validateAttachment(input.expenseId, input.workLogId);
@@ -106,8 +108,43 @@ export async function saveFile(buffer: Buffer, input: SaveInput) {
     media: { mimeType: input.mimeType, body: Readable.from(buffer) },
     fields: "id,name,mimeType,size,thumbnailLink,webViewLink",
   });
-  if (!uploaded.data.id) throw new Error("Google Drive did not return a file id");
+  return recordDocument(uploaded.data, { ...input, name }, buffer.length);
+}
 
+type AttachDriveInput = Omit<SaveInput, "mimeType" | "name"> & { driveFileId: string; name?: string };
+
+/**
+ * Copies one existing Google Drive file (e.g. a site photo the owner saved to Drive)
+ * into the app's category folder and records it as a document. The source file is
+ * only read, never modified, moved or deleted. Needs the drive.readonly scope.
+ */
+export async function attachDriveFile(input: AttachDriveInput) {
+  if (!/^[A-Za-z0-9_-]{10,200}$/.test(input.driveFileId)) throw new Error("driveFileId is not a valid Google Drive file id");
+  await validateAttachment(input.expenseId, input.workLogId);
+  const { drive, rootId } = await driveContext();
+  let source: DriveFileMeta;
+  try {
+    source = (await drive.files.get({ fileId: input.driveFileId, fields: "id,name,mimeType,size,trashed", supportsAllDrives: true })).data;
+  } catch {
+    throw new Error("Could not read that Drive file. Check the id, and reconnect Google in the app so it has read access to Drive.");
+  }
+  const mimeType = (source.mimeType || "").toLowerCase();
+  if (!ALLOWED_MIME_TYPES.includes(mimeType as AllowedMime)) throw new Error(`Unsupported file type: ${source.mimeType || "unknown"}`);
+  const size = Number(source.size || 0);
+  if (!size || size > MAX_FILE_BYTES) throw new Error("File must be between 1 byte and 10 MB");
+  const name = cleanName(input.name || source.name || "drive-file");
+  const parentId = await categoryFolder(drive, rootId, input.category);
+  const copied = await drive.files.copy({
+    fileId: input.driveFileId,
+    requestBody: { name, parents: [parentId] },
+    fields: "id,name,mimeType,size,thumbnailLink,webViewLink",
+    supportsAllDrives: true,
+  });
+  return recordDocument(copied.data, { ...input, name, mimeType: mimeType as AllowedMime }, size);
+}
+
+async function recordDocument(file: DriveFileMeta, input: SaveInput, fallbackSize: number) {
+  if (!file.id) throw new Error("Google Drive did not return a file id");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -115,7 +152,7 @@ export async function saveFile(buffer: Buffer, input: SaveInput) {
     const inserted = await client.query(
       `INSERT INTO documents (project_id,name,drive_file_id,thumbnail_url,web_view_link,mime_type,size_bytes,category,tags)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,project_id AS "projectId",name,drive_file_id AS "driveFileId",thumbnail_url AS "thumbnailUrl",web_view_link AS "webViewLink",mime_type AS "mimeType",size_bytes::float8 AS "sizeBytes",category,tags,uploaded_at AS "uploadedAt"`,
-      [project.rows[0]?.id ?? null, uploaded.data.name || name, uploaded.data.id, uploaded.data.thumbnailLink ?? null, uploaded.data.webViewLink ?? null, uploaded.data.mimeType || input.mimeType, Number(uploaded.data.size || buffer.length), input.category, [...new Set(input.tags ?? [])]],
+      [project.rows[0]?.id ?? null, file.name || input.name, file.id, file.thumbnailLink ?? null, file.webViewLink ?? null, file.mimeType || input.mimeType, Number(file.size || fallbackSize), input.category, [...new Set(input.tags ?? [])]],
     );
     const document = inserted.rows[0];
     if (input.expenseId) {

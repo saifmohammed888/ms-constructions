@@ -10,6 +10,7 @@ Standalone TypeScript/Node MCP server for the MS Constructions database. It expo
 - `work_logs_read`, `work_log_create`, `work_log_update`
 - `file_upload` — one base64 file, maximum 10 MB
 - `file_import_url` — one file from an allow-listed HTTPS hostname, maximum 10 MB
+- `file_attach_drive` — copy one existing Google Drive file (by id) into the app folder, optionally renamed, and attach it to one expense or work log. Requires the app's Google connection to include `drive.readonly`: after deploying, reconnect Google in the app once.
 
 ## Mutation safety
 

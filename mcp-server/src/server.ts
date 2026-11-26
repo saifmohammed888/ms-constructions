@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import { pool, query } from "./db.js";
-import { ALLOWED_MIME_TYPES, DOCUMENT_CATEGORIES, decodeBase64, downloadFile, saveFile, validateImportUrl } from "./files.js";
+import { ALLOWED_MIME_TYPES, DOCUMENT_CATEGORIES, attachDriveFile, decodeBase64, downloadFile, saveFile, validateImportUrl } from "./files.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const API_KEY = process.env.MCP_API_KEY;
@@ -192,6 +192,16 @@ function createAppMcpServer() {
       const downloaded = await downloadFile(await validateImportUrl(url));
       return result(await saveFile(downloaded.buffer, { ...input, mimeType: downloaded.mimeType }));
     } catch (error) { return failure(error); }
+  });
+
+  mcp.registerTool("file_attach_drive", {
+    title: "Attach one existing Google Drive file",
+    description: "Copies one existing Google Drive file (by file id, e.g. a site photo saved to Drive) into the app's Drive folder under the given category, optionally renaming it, and attaches it to one expense or work log. The source file is only read, never changed or deleted. Images, PDF, Word or Excel up to 10 MB.",
+    inputSchema: z.object({ ...fileAttachment, name: z.string().min(1).max(180).optional(), driveFileId: z.string().min(10).max(200) }),
+    annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async (input) => {
+    try { return result(await attachDriveFile(input)); }
+    catch (error) { return failure(error); }
   });
 
   return mcp;
